@@ -1,11 +1,11 @@
+import IncidentDemo from "../components/demo/IncidentDemo";
+
 /**
- * Placeholder home page — genesis only, no engine code and no domain logic.
- *
- * M2 will replace this with a deployed skeleton that exposes a real health
- * endpoint (app/api/health) backed by M1's frozen contracts. M8 will build
- * the actual interactive demo (live conflict injection against the
- * incident-response domain from M6). Until then this page exists only so
- * `npm run build` has something real to render.
+ * M8 — the interactive demo. This page itself stays a server component (no
+ * "use client" here); `IncidentDemo` is the one client boundary, and it is
+ * the only place this app calls into the real engine
+ * (`components/demo/compute-demo-view.ts`) — see that file's own header
+ * for why the engine calls live there and not in this page.
  */
 export default function Home() {
   return (
@@ -17,9 +17,14 @@ export default function Home() {
         about itself.
       </p>
       <p>
-        This project is in progress. No live demo exists yet — see the
-        README for current status.
+        Below: the same incident-remediation scenario{" "}
+        <code>npm run demo:incident</code> runs on the command line, live in
+        the browser. Nothing here is a scripted transcript — every panel is
+        the real return value of this repository&rsquo;s own conflict
+        detector, gate, and arbitration engine, recomputed on every change
+        you make.
       </p>
+      <IncidentDemo />
     </main>
   );
 }
