@@ -39,16 +39,20 @@ import { isCheckpointFresh } from "./clock.js";
  * this type-level exclusion, plus this function's own signature carrying
  * no `Intervention`-typed parameter at all, is what this project's actual
  * safety claim rests on. Two source-scan tests reconfirm narrower,
- * differently-scoped facts on top of that: `__tests__/architecture.
- * test.ts` fails the build if that mode's own name appears literally,
- * as text, anywhere in this package's non-test source; `__tests__/
- * type-leak.test.ts` independently fails the build if any type
- * annotation's own RESOLVED type includes that mode's literal even when
- * reached by computation (`Extract`, an indexed access, a conditional
- * type) with no matching text anywhere — a distinct, decidable question
- * neither `architecture.test.ts` nor a plain grep can answer. See
- * `.genesis/decisions/0004-gate.md` Decision 6 for why this milestone
- * needed both, after independent review found a real gap between them.
+ * differently-scoped facts on top of that, NEITHER claimed to be
+ * complete: `__tests__/architecture.test.ts` fails the build if that
+ * mode's own name appears literally, as text, anywhere in this package's
+ * non-test source. `__tests__/type-leak.test.ts` is a best-effort recall
+ * layer that resolves the checker's own assigned type for a bounded,
+ * explicitly-enumerated set of declaration kinds and fails the build if
+ * one contains that mode's literal even when reached by computation
+ * (`Extract`, an indexed access) with no matching text anywhere — three
+ * rounds of independent review each found a declaration kind its
+ * enumeration missed, and its own header states plainly that this
+ * enumeration is not proven complete, only checked against everything
+ * found so far. See `.genesis/decisions/0004-gate.md` Decision 6 for the
+ * full three-round history and why a recall claim, not a completeness
+ * one, is this file's correct resting state.
  *
  * WHAT THIS MEANS FOR THE OBLIGATION THIS MILESTONE INHERITS FROM M1:
  * `.genesis/decisions/0001-contracts.md` Decision 2 states the project's
