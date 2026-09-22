@@ -492,4 +492,75 @@ describe("HumanId is never fabricated via a cast anywhere in lib/ non-test sourc
       expect(analyzeScratch(control).casts).toHaveLength(1);
     });
   });
+
+  /**
+   * DISCLOSED LIMIT — NOT A CHECK TO PASS, A GAP PINNED SO IT IS NEVER
+   * SILENTLY REDISCOVERED. Independent verification (L4 VERIFY, round 3)
+   * reported two routes that mint a `HumanId` from a raw string with NO
+   * cast expression naming the brand anywhere — this scan structurally
+   * cannot see either, by design, not by oversight (see `human-id.ts`'s
+   * own header and `intervention.ts`'s header for why no scan of this
+   * shape ever could, and why this project does not chase them). Per the
+   * coordinator's explicit ruling after this report: "do not extend the
+   * scanner again." These tests do NOT ask `findHumanIdReferenceIn` to
+   * catch anything — they confirm, and lock in, that it correctly finds
+   * NOTHING for both, so a future reader sees the documented ceiling
+   * enforced by a real assertion instead of only reading a claim about it.
+   */
+  describe("DISCLOSED LIMIT (not a check): TypeScript's unsoundness gives routes no brand-identity scan can enumerate", () => {
+    it("[route A] a value laundered through `any` mints a HumanId with no cast expression at all — confirmed NOT caught", () => {
+      const source = [
+        'import type { HumanId } from "../human-id.js";',
+        "function getRaw(): any {",
+        '  return "definitely-not-a-human";',
+        "}",
+        "export const attack3: HumanId = getRaw();",
+        'export const attack3b: HumanId = JSON.parse(\'"also-not-a-human"\');',
+      ].join("\n");
+      const { casts } = analyzeScratch(source);
+      expect(casts).toEqual([]);
+    });
+
+    it("[route B] a generic helper cast to its own type parameter, with the brand named only as a type ARGUMENT at the call site — confirmed NOT caught", () => {
+      const source = [
+        'import type { HumanId } from "../human-id.js";',
+        "function unsafeCast<T>(x: unknown): T {",
+        "  return x as T;",
+        "}",
+        'export const attack4: HumanId = unsafeCast<HumanId>("nobody-authorized-this");',
+      ].join("\n");
+      const { casts } = analyzeScratch(source);
+      // The cast inside unsafeCast targets T, not HumanId by name — the
+      // ONE place HumanId appears is the type argument at the call site,
+      // which findHumanIdReferenceIn never visits (it only walks a cast
+      // expression's own target type node). Confirmed here, not assumed.
+      expect(casts).toEqual([]);
+    });
+
+    it("sanity: both routes really do produce a value TypeScript accepts as HumanId with zero diagnostics — the gap is real, not hypothetical", () => {
+      const source = [
+        'import type { HumanId } from "../human-id.js";',
+        "function getRaw(): any {",
+        '  return "definitely-not-a-human";',
+        "}",
+        "function unsafeCast<T>(x: unknown): T {",
+        "  return x as T;",
+        "}",
+        "export const attack3: HumanId = getRaw();",
+        'export const attack4: HumanId = unsafeCast<HumanId>("nobody-authorized-this");',
+      ].join("\n");
+      const file = join(SCRATCH_DIR, `__scratch_${Math.random().toString(36).slice(2)}__.ts`);
+      writeFileSync(file, source);
+      const probeApi = new API();
+      try {
+        const snapshot = probeApi.updateSnapshot({ openProjects: [TSCONFIG_LIB], openFiles: [file] });
+        const project = snapshot.getProject(TSCONFIG_LIB);
+        const diagnostics = project?.program.getSemanticDiagnostics(file) ?? [];
+        expect(diagnostics).toEqual([]);
+      } finally {
+        probeApi.close();
+        rmSync(file, { force: true });
+      }
+    });
+  });
 });
