@@ -4,31 +4,103 @@ import type { NonEmptyArray } from "./non-empty-array.js";
 
 /**
  * THE CLAIM THIS FILE ACTUALLY MAKES ABOUT `halt`/`forced`, STATED ONCE
- * HERE AT ITS TRUE STRENGTH, AFTER INDEPENDENT VERIFICATION REPORTED A
- * WORKING BYPASS OF AN EARLIER, OVERSTATED VERSION OF THIS CLAIM:
+ * HERE AT ITS TRUE STRENGTH — REWRITTEN A SECOND TIME after independent
+ * verification reported that the first rewrite was ALSO too strong, in
+ * the harmful direction: it told a reader "reachable only via a
+ * deliberate, visible cast... in cleartext," which reads as a claim of
+ * completeness a scanner could chase — and two further working routes,
+ * with no cast naming the brand at all, promptly disproved it (see
+ * `human-id.ts`'s header for both, and `.genesis/decisions/
+ * 0001-contracts.md` Decision 2 for the full incident report across all
+ * rounds). This paragraph is the one place this project states what it
+ * actually relies on, and does not restate it more strongly anywhere else.
  *
- * The type system makes an unauthorized `halt`/`forced` impossible to
- * construct ACCIDENTALLY (an object literal missing `authorizedBy` or
- * `conflictId` is a compile error — see the `@ts-expect-error` proofs in
- * `__tests__/intervention.test.ts`) or CONVENIENTLY (no function anywhere
- * in `lib/` mints a `HumanId` from a raw string — see `human-id.ts` — and
- * `__tests__/human-id.test.ts` semantically greps for a cast into that
- * brand, resolved through the real type checker so an aliased or
- * re-exported import cannot hide one either). It does NOT, and no
- * TypeScript design CAN, stop a `halt`/`forced` value reached by a
- * DELIBERATE cast through `unknown` at the OUTER type — e.g.
- * `{ kind: "halt", mode: "forced", authorizedBy: "not-a-real-human",
- * conflictId: "fake-conflict" } as unknown as HaltForced` — because that
- * cast never names `HumanId` as a type at all; it bypasses this file's
- * every field requirement in one step, at the object's own boundary, not
- * at any one field's. Reaching a `halt`/`forced` this way requires writing
- * that cast, in cleartext, inside `lib/` — a visible, reviewable act that
- * looks exactly like what it is, not something a policy check catches
- * later and not something achievable by accident or by reaching for an
- * innocuous-looking helper. See `.genesis/decisions/0001-contracts.md`
- * Decision 2 for the full incident report (two independently-verified
- * bypasses, what each one broke, and what was fixed vs. what is disclosed
- * as a permanent, unclosable limit of any type system).
+ * WHAT THE TYPE SYSTEM ACTUALLY GUARANTEES: an unauthorized `halt`/`forced`
+ * cannot be constructed ACCIDENTALLY (a literal missing `authorizedBy` or
+ * `conflictId` is a compile error — `@ts-expect-error` proofs in
+ * `__tests__/intervention.test.ts`) or CONVENIENTLY via an ordinary,
+ * visibly-named cast (no function anywhere in `lib/` mints a `HumanId`,
+ * and `__tests__/human-id.test.ts` resolves every cast's target type
+ * through the real checker's own symbol/alias resolution, so aliasing or
+ * re-exporting the import does not help). That is genuinely useful and
+ * genuinely narrow — it is NOT, and is not claimed anywhere in this
+ * codebase to be, a guarantee that a `HumanId` cannot be forged at all.
+ * IT CANNOT BE: TypeScript is deliberately unsound (`any` is a designed
+ * escape hatch; a generic function's type parameter can be instantiated
+ * with the brand at the CALL SITE, with no cast naming the brand anywhere
+ * inside the function; `JSON.parse` returns `any`; `Object.assign` and
+ * declaration merging are further routes) — the set of routes from a raw
+ * value to a branded type is NOT ENUMERABLE, and `human-id.ts`'s own two
+ * concrete examples (routes A and B) are exactly that: EXAMPLES of an
+ * open-ended class, not the class itself. A scanner that closes today's
+ * known routes and calls the class closed is a false claim of
+ * completeness — this project tried a narrower version of exactly that
+ * once already and is not repeating the mistake at a larger scale.
+ *
+ * SO WHAT DOES `halt`/`forced`'s SAFETY ACTUALLY REST ON? Not "nobody can
+ * forge a `HumanId`" — that claim is unenforceable in this language by
+ * construction, and staking the project's central design commitment on
+ * an unenforceable claim would guarantee a permanent, growing gap between
+ * what this file says and what the code can prove, exactly the gap the
+ * last two rounds kept finding. The claim this project actually relies on
+ * instead is a property of CODE THIS PROJECT CONTROLS, not of a value's
+ * provenance, which it cannot control once TypeScript's escape hatches are
+ * in play: **no module under `lib/` ever MINTS a `HumanId`, or assembles a
+ * `halt`/`forced` `Intervention` from scratch — the only way `lib/`'s own
+ * code may ever produce one is by copying `authorizedBy`/`conflictId`
+ * verbatim from a value that arrived as an INPUT to whichever function is
+ * constructing it, handed in by that function's own caller, across the
+ * library's boundary.** A forged `HumanId` a CALLER constructs and passes
+ * in is that caller's lie, told outside this library — not a lie `lib/`
+ * told about itself, which is the one failure mode this whole project
+ * exists to refuse (plan §1: "the tower decides what to do... using only
+ * what that process chooses to report about itself"). This is not a new
+ * idea invented for this rewrite: the plan's own M4 section (§4) already
+ * commits to exactly this shape for the gate — "to ever include
+ * `halt`/`forced` in its output at all — the return type has structurally
+ * no slot for it, because this engine has no channel to a human and must
+ * not manufacture authorization," checked by a source-scan that "greps
+ * this package's return type declarations and fails the build if
+ * `'forced'` appears anywhere in `lib/gate/**`'s non-test source." M5's
+ * own refusal list (plan §4) is the analogous, slightly weaker rule for
+ * `arbitrate` (which DOES need to be able to select `forced`, given a
+ * valid authorization): "to produce `halt`/`forced` without a
+ * `humanAuthorization` whose `conflictId` matches the specific conflict
+ * being ruled on" — i.e. `arbitrate` may copy fields from an authorization
+ * it received, never mint one.
+ *
+ * WHAT THIS MEANS FOR THIS MILESTONE, HONESTLY: M1 builds no engines, so
+ * this property has no code to check yet — `lib/gate/**` and
+ * `lib/arbitrate/**` do not exist. This paragraph is therefore a BUILD
+ * REQUIREMENT recorded now for M4/M5 to satisfy and prove with their own
+ * source-scan tests when they exist (M4's version is already named,
+ * verbatim, in the plan itself, quoted above; M5's own scan would need to
+ * confirm every `authorizedBy`/`conflictId` pair `arbitrate` ever places
+ * into a returned `Intervention` was read off its own `humanAuthorization`
+ * parameter, never freshly constructed) — not a claim this file makes
+ * about code that does not exist. What THIS milestone's own tests
+ * (`human-id.test.ts`, `intervention.test.ts`) DO check today is narrower
+ * and real: no minting function exists in `lib/contracts` itself, and no
+ * ordinary, visibly-named cast into `HumanId` appears in this milestone's
+ * own non-test source (there is none — this milestone builds no engines
+ * either). The brand and its scan remain worth keeping for exactly the
+ * failure mode they actually catch (an engineer reaching for a visible
+ * cast, aliased or not) — one piece of evidence, not the whole guarantee.
+ *
+ * ONE MORE HONEST LIMIT, NAMED HERE RATHER THAN LEFT IMPLICIT: even a
+ * perfectly-upheld "`lib/` never mints one" property does not stop a
+ * CALLER of this library (a future M6 domain script, or M8's demo app)
+ * from constructing a forged `HumanId` itself and passing it into
+ * `arbitrate` as part of a fabricated `humanAuthorization`. This project
+ * does not claim to solve that — verifying that an incoming authorization
+ * is genuine (a real signature, a real session check) is real I/O this
+ * pure `lib/` deliberately does not have (`.genesis/PLAN.md`'s own "no
+ * real I/O in lib" discipline) and is out of scope for every milestone
+ * this plan names. What this project claims is narrower and, unlike "no
+ * forgery anywhere," actually true: the TOWER's own code never manufactures
+ * an authorization on its own initiative. A caller lying to the tower is a
+ * different, smaller, and correctly-attributed problem than the tower
+ * lying to itself.
  */
 
 /**
