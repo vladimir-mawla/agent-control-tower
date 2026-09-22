@@ -5,17 +5,29 @@ import { defineConfig } from "vitest/config";
 // same discipline as this project's infrastructure siblings, decision-engine,
 // shadow-run, and memory-ledger.
 //
-// Every include glob below except "tests/**/*.test.ts" is empty until M1 —
-// the same "pre-added-ahead-of-need" precedent shadow-run's and
-// memory-ledger's own vitest.config.ts document: an empty glob costs
-// nothing today and means this file never needs a second edit purely to
-// teach vitest where a later, already-planned milestone's tests live.
-//   - "lib/**/*.test.ts"      — M1 (contracts) onward
-//   - "app/**/*.test.ts"      — M2 (deploy) / M8 (UI)
-//   - "domains/**/*.test.ts"  — M6 (incident-response domain)
-//   - "tests/**/*.test.ts"    — this repo's own smoke test now; M7's failure
-//                                suite later (plan's freeze boundary is
-//                                tests/failures/**)
+// Every include glob below except "tests/**/*.test.ts" was empty until its
+// own milestone landed — the same "pre-added-ahead-of-need" precedent
+// shadow-run's and memory-ledger's own vitest.config.ts document: an empty
+// glob costs nothing today and means this file never needs a second edit
+// purely to teach vitest where a later, already-planned milestone's tests
+// live.
+//   - "lib/**/*.test.ts"                  — M1 (contracts) onward
+//   - "app/**/*.test.ts"                  — M2 (deploy)
+//   - "domains/**/*.test.ts"              — M6 (incident-response domain)
+//   - "tests/**/*.test.ts"                — this repo's own smoke test now; M7's
+//                                            failure suite later (plan's freeze
+//                                            boundary is tests/failures/**)
+//   - "components/**/*.test.ts(x)"        — M8 (interactive demo): pure-function
+//                                            tests over compute-demo-view.ts /
+//                                            format-intervention.ts, plus one
+//                                            render smoke test over IncidentDemo.tsx.
+//                                            ".test.tsx" is new with M8 — no earlier
+//                                            milestone had any React component to
+//                                            test at all.
+// `environment` stays "node", NOT "jsdom" — still no framework plugin, still no
+// DOM. M8's own one render test uses `react-dom/server`'s `renderToStaticMarkup`,
+// which needs no DOM, specifically so this line never has to change and lib/'s
+// own "framework-free" test environment stays exactly what it always was.
 export default defineConfig({
   test: {
     environment: "node",
@@ -24,6 +36,8 @@ export default defineConfig({
       "app/**/*.test.ts",
       "domains/**/*.test.ts",
       "tests/**/*.test.ts",
+      "components/**/*.test.ts",
+      "components/**/*.test.tsx",
     ],
     watch: false,
     // `lib/contracts/__tests__/human-id.test.ts`, `file-inventory.test.ts`,

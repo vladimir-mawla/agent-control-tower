@@ -1,8 +1,8 @@
 /*
- * Minimal reset — infrastructure only. This project's UI (M8) is not built
- * yet; this file exists so the App Router has a stylesheet to import and
- * `npm run typecheck` / `npm run build` have a real app/ tree to check,
- * ahead of M1's contracts and M2's deployed health endpoint.
+ * Minimal reset, plus (M8) the page-level layout for the one real page
+ * this app has — `app/page.tsx` and `components/demo/IncidentDemo.tsx`.
+ * Component-scoped styling lives in `components/demo/IncidentDemo.module.css`;
+ * this file only owns the document-level reset and the `<main>` container.
  */
 * {
   box-sizing: border-box;
@@ -15,4 +15,11 @@ html {
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 64rem;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
 }

@@ -1,0 +1,155 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 62rem;
+}
+
+.section {
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+}
+
+.sectionTitle {
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.7;
+}
+
+.controlsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+.controlGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.controlLabel {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.controlHint {
+  font-size: 0.78rem;
+  opacity: 0.65;
+  margin: 0;
+}
+
+.radioRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.radioOption {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-size: 0.88rem;
+}
+
+.injectButton {
+  align-self: flex-start;
+  padding: 0.5rem 0.9rem;
+  border-radius: 0.4rem;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-size: 0.88rem;
+}
+
+.injectButton:hover {
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  font-size: 0.8rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.empty {
+  opacity: 0.65;
+  font-style: italic;
+}
+
+.rulingHeadline {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem 0;
+}
+
+.rulingKind-observe {
+  color: #4b7bec;
+}
+.rulingKind-warn {
+  color: #b8860b;
+}
+.rulingKind-pause {
+  color: #b8860b;
+}
+.rulingKind-halt {
+  color: #c0392b;
+}
+.rulingKind-quarantine {
+  color: #8e44ad;
+}
+
+.escalation {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.2rem 0.6rem;
+  border-radius: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.escalationOn {
+  background: color-mix(in srgb, #c0392b 18%, transparent);
+  color: #c0392b;
+}
+
+.escalationOff {
+  background: color-mix(in srgb, #2e8b57 18%, transparent);
+  color: #2e8b57;
+}
+
+.evidenceList {
+  margin: 0.5rem 0 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.errorPanel {
+  border: 2px solid #c0392b;
+  border-radius: 0.5rem;
+  padding: 1rem 1.25rem;
+  background: color-mix(in srgb, #c0392b 10%, transparent);
+}
+
+.footerNote {
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
