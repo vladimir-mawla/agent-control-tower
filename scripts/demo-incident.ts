@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   step("checkout-service (write-write, large blast radius -> corrupting severity): RollbackBot self-reported, AutoScaler cross-checked, both on a fresh, shared checkpoint");
   const checkout = conflictOn(RESOURCES.checkoutService);
   printConflict(checkout);
-  const checkoutAvailable = combinedAvailableInterventions(checkoutEvidence(), NOW_T0);
+  const checkoutAvailable = combinedAvailableInterventions(checkoutEvidence(), checkout.agentIds, NOW_T0);
   printAvailable(checkoutAvailable);
   assert.equal(checkoutAvailable.has("quarantine"), false, "RollbackBot's own claim is still self-reported — it must withhold quarantine for the whole conflict even though AutoScaler's is cross-checked");
   assert.equal(checkoutAvailable.has("halt-checkpointed"), true, "a fresh, shared checkpoint must grant halt-checkpointed");
@@ -184,7 +184,7 @@ async function main(): Promise<void> {
   step("session-cache (write-read, medium blast radius -> contained severity): cross-checked corroboration, no usable checkpoint");
   const sessionCache = conflictOn(RESOURCES.sessionCache);
   printConflict(sessionCache);
-  const sessionCacheAvailable = combinedAvailableInterventions(sessionCacheEvidence(), NOW_T0);
+  const sessionCacheAvailable = combinedAvailableInterventions(sessionCacheEvidence(), sessionCache.agentIds, NOW_T0);
   printAvailable(sessionCacheAvailable);
   assert.equal(sessionCacheAvailable.has("pause"), false, "no usable checkpoint must withhold pause");
   assert.equal(sessionCacheAvailable.has("halt-checkpointed"), false, "no usable checkpoint must withhold halt-checkpointed");
@@ -197,7 +197,7 @@ async function main(): Promise<void> {
   step("feature-flag-config (write-write, medium blast radius -> contained severity), BEFORE a checkpoint has been declared");
   const featureFlags = conflictOn(RESOURCES.featureFlagConfig);
   printConflict(featureFlags);
-  const beforeAvailable = combinedAvailableInterventions(featureFlagsEvidence("before"), NOW_T0);
+  const beforeAvailable = combinedAvailableInterventions(featureFlagsEvidence("before"), featureFlags.agentIds, NOW_T0);
   printAvailable(beforeAvailable);
   const beforeRuling = assertRuling(ruleOn(featureFlags, beforeAvailable, featureFlagsParticipants("before")), { kind: "warn" }, "feature-flags/before");
   printRuling(beforeRuling);
@@ -205,7 +205,7 @@ async function main(): Promise<void> {
   trackKind(beforeRuling);
 
   step("feature-flag-config, 5 minutes later: a fresh, shared checkpoint has since appeared");
-  const afterAvailable = combinedAvailableInterventions(featureFlagsEvidence("after"), NOW_T1);
+  const afterAvailable = combinedAvailableInterventions(featureFlagsEvidence("after"), featureFlags.agentIds, NOW_T1);
   printAvailable(afterAvailable);
   const afterRuling = assertRuling(ruleOn(featureFlags, afterAvailable, featureFlagsParticipants("after")), { kind: "pause" }, "feature-flags/after");
   printRuling(afterRuling);
@@ -217,7 +217,7 @@ async function main(): Promise<void> {
   step("internal-metrics-store (write-write, small blast radius -> benign severity): observe is already adequate");
   const metrics = conflictOn(RESOURCES.internalMetricsStore);
   printConflict(metrics);
-  const metricsAvailable = combinedAvailableInterventions(metricsEvidence(), NOW_T0);
+  const metricsAvailable = combinedAvailableInterventions(metricsEvidence(), metrics.agentIds, NOW_T0);
   printAvailable(metricsAvailable);
   const metricsRuling = assertRuling(ruleOn(metrics, metricsAvailable, metricsParticipants()), { kind: "observe" }, "metrics");
   printRuling(metricsRuling);
@@ -229,7 +229,7 @@ async function main(): Promise<void> {
   printConflict(undeclared);
   const undeclaredSeverity = computeSeverity(undeclared.kind, blastRadiusOf(undeclared.resourceId));
   console.log(`  -> severity bumped to "${undeclaredSeverity}" — undeclared access is never treated as weaker than a real, declared collision on the same resource.`);
-  const undeclaredAvailable = combinedAvailableInterventions(undeclaredAccessEvidence(), NOW_T0);
+  const undeclaredAvailable = combinedAvailableInterventions(undeclaredAccessEvidence(), undeclared.agentIds, NOW_T0);
   printAvailable(undeclaredAvailable);
   const undeclaredRuling = assertRuling(ruleOn(undeclared, undeclaredAvailable, undeclaredAccessParticipants()), { kind: "warn" }, "undeclared-access");
   printRuling(undeclaredRuling);
