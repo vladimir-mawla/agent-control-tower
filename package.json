@@ -13,7 +13,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.lib.json --noEmit && tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "demo:incident": "node --import ./scripts/register-ts-loader.mjs scripts/demo-incident.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
