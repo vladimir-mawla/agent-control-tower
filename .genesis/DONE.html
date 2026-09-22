@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>DONE — agent-control-tower</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --line:#30363d; --ink:#e6edf3; --mut:#8b949e;
+          --ok:#2ea043; --warn:#d29922; --bad:#f85149; --accent:#58a6ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:15px/1.55 ui-sans-serif,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:920px; margin:0 auto; padding:32px 24px 80px; }
+  h1 { font-size:26px; margin:0 0 4px; }
+  h2 { font-size:18px; margin:32px 0 12px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  .sub { color:var(--mut); margin:0 0 24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin:12px 0; }
+  .locked { border-left:3px solid var(--warn); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--mut); font-weight:600; }
+  code { background:#1f2630; padding:1px 6px; border-radius:5px; font-size:13px; }
+  .gate { display:flex; gap:10px; align-items:flex-start; padding:6px 0; }
+  .box { width:16px; height:16px; border:1.5px solid var(--mut); border-radius:4px; flex:0 0 auto; margin-top:2px; }
+  .done .box { background:var(--ok); border-color:var(--ok); }
+  .done .label { color:var(--mut); text-decoration:line-through; }
+  .pill { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--mut); }
+  .pill.ok{color:var(--ok);border-color:var(--ok);} .pill.wip{color:var(--warn);border-color:var(--warn);} .pill.todo{color:var(--mut);border-color:var(--mut);}
+  .note { color:var(--mut); font-size:13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>DONE — agent-control-tower</h1>
+  <p class="sub">The single source of truth for <b>what "done" means</b> and <b>the implementation plan</b>.
+     This file is LOCKED — the driver model may not edit it without explicit user request.
+     Updated: 2026-09-22</p>
+
+  <!-- ───────────── THE LOCKED SPEC ───────────── -->
+  <h2>1 · The Locked Spec (what we are building)</h2>
+  <div class="card locked">
+    <p><b>Cognitive job:</b> Given two or more already-running agents whose declared resource claims,
+       heartbeats, and checkpoint declarations conflict, mechanically detect the conflict, compute what
+       intervention is structurally permitted given only the corroboration behind each fact and the
+       freshness of each agent's own safe-stop declaration, and rule on the strongest intervention both
+       permitted and warranted by severity — always citing the conflict id, the rule, and the evidence,
+       and never granting an intervention more forceful than the offending agent's own corroborated,
+       checkpointed evidence can actually support. See <code>.genesis/PLAN.md</code> §1–2 for the full
+       claim and closed vocabulary.</p>
+    <p><b>Inputs:</b> typed <code>ResourceClaim[]</code>, <code>Heartbeat[]</code>, and
+       <code>CheckpointDeclaration</code>s, each carrying a <code>Corroboration</code> level
+       (<code>self-reported | cross-checked | independently-verified</code>) — never a bare trust
+       boolean. &nbsp;→&nbsp; <b>Outputs:</b> a closed <code>Intervention</code> (<code>observe</code> ·
+       <code>warn</code> · <code>pause</code> · <code>halt</code> [<code>checkpointed</code> |
+       <code>forced</code>] · <code>quarantine</code>), always paired with the conflict it rules on and
+       the evidence that justified it.</p>
+    <p><b>Autonomy level:</b> Fully autonomous for detecting conflicts, computing what's structurally
+       permitted, and ruling up to and including <code>quarantine</code> — none of that needs a human in
+       the loop. What is deliberately NOT autonomous: <code>halt</code>/<code>forced</code>, the only
+       variant that cannot compile without a per-conflict <code>HumanAuthorization</code>. No engine
+       milestone may construct that variant on its own initiative.</p>
+    <p><b>Failure tolerance:</b> Fail toward the weakest defensible intervention, never toward a
+       fabricated stronger one. A <code>corrupting</code>-severity conflict the gate only permits
+       <code>warn</code> for must return <code>warn</code> plus an explicit
+       <code>escalationRecommended: true</code> — never a silently invented <code>quarantine</code>, and
+       never a bare <code>warn</code> that reads as "handled." Silence from an agent is never evidence of
+       safety; a held claim stays held, never released, once its owner stops heartbeating.</p>
+    <p class="note">Filled during Genesis (G0–G2, <code>.genesis/PLAN.md</code>), following the shape used
+       in decision-engine's, shadow-run's, and memory-ledger's own <code>.genesis/DONE.html</code> (this
+       project's infrastructure siblings) — content is project-specific, structure only is borrowed. No
+       engine code exists yet: M1 (contracts) is a separate milestone with its own PR and its own
+       verifier.</p>
+  </div>
+
+  <!-- ───────────── DEFINITION OF DONE ───────────── -->
+  <h2>2 · Definition of Done (binary gates — checked by the VERIFIER, not the maker)</h2>
+  <div class="card">
+    <div class="gate"><span class="box"></span><span class="label">Dependency direction inward, zero cycles: <code>lib/contracts</code> → <code>lib/conflict</code> → <code>lib/gate</code> → <code>lib/arbitrate</code>, one-directional <span class="note">(modular-architecture gate)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label"><code>npm run typecheck</code> clean AND <code>npm test</code> green</span></div>
+    <div class="gate"><span class="box"></span><span class="label">One <code>verify</code> pass by a <b>separate</b> agent/model (L4)</span></div>
+    <div class="gate"><span class="box"></span><span class="label">No milestone's freeze boundary touched by a later milestone <span class="note">(freeze-boundary gate — the independent verifier's first job on every milestone)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label">A <code>halt</code>/<code>forced</code> literal missing <code>authorizedBy</code> or <code>conflictId</code> must not compile; a source-scan test proves <code>"forced"</code> never appears in <code>lib/gate/**</code>'s non-test source <span class="note">(no-self-authorized-force gate, from M1/M4)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label"><code>Intervention</code> is exhaustively matched via an <code>assertNeverIntervention</code> helper, proven live by adding a 6th variant and confirming every call site fails to compile <span class="note">(exhaustiveness-is-live gate, from M1)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label"><code>detectConflicts</code> is proven order-independent across every permutation of a claim set, and rejects a hostile (throwing-getter/<code>Proxy</code>) claims array as a typed failure, never an uncaught exception <span class="note">(pure-and-hostile-input gate, from M3)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label"><code>quarantine</code> never appears in the gate's available set when every claim's corroboration is <code>self-reported</code>; arbitration falls back to <code>warn</code> and says plainly that isolation could not be enforced <span class="note">(no-fabricated-quarantine gate, from M4/M5)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label">A <code>corrupting</code>-severity conflict the gate only permits a weaker intervention for returns that weaker intervention plus <code>escalationRecommended: true</code> — never a silent downgrade reported as adequate <span class="note">(honest-ceiling gate, from M5/M7)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label">The failure suite's ten cases each assert a specific typed result, not merely "no exception thrown," including the disclosed, unsolved priority-inversion case <span class="note">(failure-suite gate, from M7)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label">The live demo URL injects a colliding remediation claim and produces the same ruling as <code>npm run demo:incident</code>'s own fixture, checked by an independent verifier comparing outputs directly <span class="note">(deliverable gate — the brief requires a live demo)</span></span></div>
+    <div class="gate"><span class="box"></span><span class="label">A clean clone plus <code>npm ci</code> plus typecheck plus test passes with no credentials configured <span class="note">(clean-clone gate)</span></span></div>
+    <p class="note">A milestone is DONE only when every applicable box above is checked by the verifier,
+       and never by the building agent marking its own work. This genesis repo has no engine code yet —
+       every gate above becomes checkable starting with M1's own PR and its own verifier.</p>
+  </div>
+
+  <!-- ───────────── IMPLEMENTATION PLAN ───────────── -->
+  <h2>3 · Implementation Plan (the work, sliced into milestones)</h2>
+  <div class="card">
+    <table>
+      <thead><tr><th>#</th><th>Milestone</th><th>Phase</th><th>Demo command (proves it works)</th><th>Loops</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td>M1</td><td>Contracts: Corroboration, ResourceClaim, CheckpointDeclaration, Conflict, Intervention, ConflictSeverity</td><td>BUILD</td><td><code>npm test -- contracts</code></td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+        <tr><td>M2</td><td>Deploy a live skeleton to Vercel</td><td>DEPLOY</td><td><code>curl -sf $DEPLOY_URL/api/health</code></td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+        <tr><td>M3</td><td>Conflict detection (<code>detectConflicts</code>)</td><td>BUILD</td><td><code>npm test -- conflict</code></td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+        <tr><td>M4</td><td>The gate: what's structurally permitted (<code>availableInterventions</code>)</td><td>BUILD</td><td><code>npm test -- gate</code></td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+        <tr><td>M5</td><td>Arbitration (<code>arbitrate</code>)</td><td>BUILD</td><td><code>npm test -- arbitrate</code></td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+        <tr><td>M6</td><td>Domain: concurrent incident-remediation agents</td><td>INTEGRATE</td><td><code>npm run demo:incident</code></td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+        <tr><td>M7</td><td>The failure suite (~10 deliberate cases)</td><td>VERIFY</td><td><code>npm test -- failures</code></td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+        <tr><td>M8</td><td>The interactive demo</td><td>BUILD</td><td>deployed URL runs live conflict injection end-to-end</td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+        <tr><td>M9</td><td>Deliverables</td><td>RELEASE</td><td><code>git clone ... && npm ci && npm run typecheck && npm test</code></td><td>L1, L4</td><td><span class="pill todo">todo</span></td></tr>
+      </tbody>
+    </table>
+    <p class="note">Total token budget = 9 milestones × 150000. Update <span class="pill wip">wip</span> /
+       <span class="pill ok">done</span> as loops complete — a milestone only flips to <code>done</code>
+       after independent (L4) verification, never by the building agent marking its own work. This is the
+       genesis (G0–G2) repo only: no milestone has started, so all nine rows above are <code>todo</code>.
+       This table is mirrored in <code>PLAN.md</code> for the agent to parse.</p>
+  </div>
+
+</div>
+</body>
+</html>
