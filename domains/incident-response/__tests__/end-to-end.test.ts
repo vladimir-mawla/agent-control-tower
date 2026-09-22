@@ -46,7 +46,7 @@ function conflictOn(resource: (typeof RESOURCES)[keyof typeof RESOURCES]) {
 describe("checkout-service — self-reported + fresh shared checkpoint, corrupting severity: gate-ceiling, then human-forced-escalation", () => {
   const conflict = conflictOn(RESOURCES.checkoutService);
   const severity = computeSeverity(conflict.kind, blastRadiusOf(conflict.resourceId));
-  const available = combinedAvailableInterventions(checkoutEvidence(), NOW_T0);
+  const available = combinedAvailableInterventions(checkoutEvidence(), conflict.agentIds, NOW_T0);
 
   it("severity is corrupting (large blast radius, a declared write-write conflict)", () => {
     expect(severity).toBe("corrupting");
@@ -88,7 +88,7 @@ describe("session-cache — cross-checked but no usable checkpoint, contained se
   it("quarantine fires, proportionate to contained severity, even though it is the strongest realizable rung on offer", () => {
     const conflict = conflictOn(RESOURCES.sessionCache);
     const severity = computeSeverity(conflict.kind, blastRadiusOf(conflict.resourceId));
-    const available = combinedAvailableInterventions(sessionCacheEvidence(), NOW_T0);
+    const available = combinedAvailableInterventions(sessionCacheEvidence(), conflict.agentIds, NOW_T0);
     expect(severity).toBe("contained");
     expect(available.has("pause")).toBe(false);
     expect(available.has("halt-checkpointed")).toBe(false);
@@ -110,7 +110,7 @@ describe("feature-flag-config — the same conflict, before and after a checkpoi
   });
 
   it("before: no checkpoint yet — gate offers only the baseline, arbitrate falls back to warn with escalation recommended", () => {
-    const available = combinedAvailableInterventions(featureFlagsEvidence("before"), NOW_T0);
+    const available = combinedAvailableInterventions(featureFlagsEvidence("before"), conflict.agentIds, NOW_T0);
     expect([...available].sort()).toEqual(["observe", "warn"]);
     const [ruling] = arbitrate([conflict], [available], [severity], featureFlagsParticipants("before"));
     expect(ruling?.intervention).toEqual({ kind: "warn", message: expect.stringContaining(String(conflict.id)) });
@@ -119,7 +119,7 @@ describe("feature-flag-config — the same conflict, before and after a checkpoi
   });
 
   it("after: a fresh, shared checkpoint has appeared — pause is now available and exactly meets the floor", () => {
-    const available = combinedAvailableInterventions(featureFlagsEvidence("after"), NOW_T1);
+    const available = combinedAvailableInterventions(featureFlagsEvidence("after"), conflict.agentIds, NOW_T1);
     expect(available.has("pause")).toBe(true);
     const [ruling] = arbitrate([conflict], [available], [severity], featureFlagsParticipants("after"));
     expect(ruling?.intervention.kind).toBe("pause");
@@ -133,7 +133,7 @@ describe("internal-metrics-store — benign severity, observe is already adequat
     const conflict = conflictOn(RESOURCES.internalMetricsStore);
     const severity = computeSeverity(conflict.kind, blastRadiusOf(conflict.resourceId));
     expect(severity).toBe("benign");
-    const available = combinedAvailableInterventions(metricsEvidence(), NOW_T0);
+    const available = combinedAvailableInterventions(metricsEvidence(), conflict.agentIds, NOW_T0);
     const [ruling] = arbitrate([conflict], [available], [severity], metricsParticipants());
     expect(ruling?.intervention).toEqual({ kind: "observe" });
     expect(ruling?.rule).toBe("severity-satisfied");
@@ -152,7 +152,7 @@ describe("diagnostic-log-bucket — undeclared-access, bumped to contained sever
   it("with no legitimate claim on file, the gate can only offer the baseline — arbitrate falls back to warn, flagged for escalation", () => {
     const conflict = conflictOn(RESOURCES.diagnosticLogBucket);
     const severity = computeSeverity(conflict.kind, blastRadiusOf(conflict.resourceId));
-    const available = combinedAvailableInterventions(undeclaredAccessEvidence(), NOW_T0);
+    const available = combinedAvailableInterventions(undeclaredAccessEvidence(), conflict.agentIds, NOW_T0);
     expect([...available].sort()).toEqual(["observe", "warn"]);
     const [ruling] = arbitrate([conflict], [available], [severity], undeclaredAccessParticipants());
     expect(ruling?.intervention.kind).toBe("warn");
@@ -169,17 +169,17 @@ describe("coverage — across this scenario's whole run, all five Intervention k
     const metrics = conflictOn(RESOURCES.internalMetricsStore);
     const undeclared = conflictOn(RESOURCES.diagnosticLogBucket);
 
-    const checkoutAvailable = combinedAvailableInterventions(checkoutEvidence(), NOW_T0);
+    const checkoutAvailable = combinedAvailableInterventions(checkoutEvidence(), checkout.agentIds, NOW_T0);
     const auth: HumanAuthorization = { authorizedBy: "ops-lead-jordan" as HumanId, conflictId: checkout.id };
 
     const rulings = [
       arbitrate([checkout], [checkoutAvailable], [computeSeverity(checkout.kind, blastRadiusOf(checkout.resourceId))], checkoutParticipants())[0],
       arbitrate([checkout], [checkoutAvailable], [computeSeverity(checkout.kind, blastRadiusOf(checkout.resourceId))], checkoutParticipants(), auth)[0],
-      arbitrate([sessionCache], [combinedAvailableInterventions(sessionCacheEvidence(), NOW_T0)], [computeSeverity(sessionCache.kind, blastRadiusOf(sessionCache.resourceId))], sessionCacheParticipants())[0],
-      arbitrate([featureFlags], [combinedAvailableInterventions(featureFlagsEvidence("before"), NOW_T0)], [computeSeverity(featureFlags.kind, blastRadiusOf(featureFlags.resourceId))], featureFlagsParticipants("before"))[0],
-      arbitrate([featureFlags], [combinedAvailableInterventions(featureFlagsEvidence("after"), NOW_T1)], [computeSeverity(featureFlags.kind, blastRadiusOf(featureFlags.resourceId))], featureFlagsParticipants("after"))[0],
-      arbitrate([metrics], [combinedAvailableInterventions(metricsEvidence(), NOW_T0)], [computeSeverity(metrics.kind, blastRadiusOf(metrics.resourceId))], metricsParticipants())[0],
-      arbitrate([undeclared], [combinedAvailableInterventions(undeclaredAccessEvidence(), NOW_T0)], [computeSeverity(undeclared.kind, blastRadiusOf(undeclared.resourceId))], undeclaredAccessParticipants())[0],
+      arbitrate([sessionCache], [combinedAvailableInterventions(sessionCacheEvidence(), sessionCache.agentIds, NOW_T0)], [computeSeverity(sessionCache.kind, blastRadiusOf(sessionCache.resourceId))], sessionCacheParticipants())[0],
+      arbitrate([featureFlags], [combinedAvailableInterventions(featureFlagsEvidence("before"), featureFlags.agentIds, NOW_T0)], [computeSeverity(featureFlags.kind, blastRadiusOf(featureFlags.resourceId))], featureFlagsParticipants("before"))[0],
+      arbitrate([featureFlags], [combinedAvailableInterventions(featureFlagsEvidence("after"), featureFlags.agentIds, NOW_T1)], [computeSeverity(featureFlags.kind, blastRadiusOf(featureFlags.resourceId))], featureFlagsParticipants("after"))[0],
+      arbitrate([metrics], [combinedAvailableInterventions(metricsEvidence(), metrics.agentIds, NOW_T0)], [computeSeverity(metrics.kind, blastRadiusOf(metrics.resourceId))], metricsParticipants())[0],
+      arbitrate([undeclared], [combinedAvailableInterventions(undeclaredAccessEvidence(), undeclared.agentIds, NOW_T0)], [computeSeverity(undeclared.kind, blastRadiusOf(undeclared.resourceId))], undeclaredAccessParticipants())[0],
     ];
 
     const seen = new Set(rulings.map((r) => (r!.intervention.kind === "halt" ? `halt-${r!.intervention.mode}` : r!.intervention.kind)));
