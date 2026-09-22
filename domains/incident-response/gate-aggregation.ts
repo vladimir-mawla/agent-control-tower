@@ -70,6 +70,27 @@ import { availableInterventions, type AvailableInterventionKind, type AvailableI
  * itself includes both unconditionally for every input
  * (`available-interventions.ts`'s own documented baseline) — this
  * function never has to special-case them.
+ *
+ * COVERAGE, ENFORCED, NOT ASSUMED — see `.genesis/decisions/
+ * 0008-incomplete-evidence.md` for the full defect report and argument.
+ * Intersecting over fewer sets than the conflict actually has makes an
+ * INCOMPLETE `evidence` array strictly MORE permissive than a complete
+ * one — backwards for a fail-closed policy, and a real, live defect: a
+ * caller that (for example) only gathers evidence for agents that
+ * heartbeated this cycle, silently dropping a weak-evidence participant,
+ * gets a WIDER `AvailableInterventionSet` than the honest one, which
+ * `arbitrate` then acts on with full confidence (`rule:
+ * "severity-satisfied"`, `escalationRecommended: false`) — reaching
+ * exactly the "disbelieve a self-report and act on that disbelief" outcome
+ * this file's whole intersection policy exists to refuse, through the
+ * CORRECT combinator fed INCOMPLETE input (distinct from failure case 10's
+ * wrong-combinator scenario). `combinedAvailableInterventions` therefore
+ * takes the conflict's full participant set as its own explicit
+ * `conflictParticipants` parameter — never inferred from `evidence` itself,
+ * since `evidence`'s own incompleteness is exactly the thing being
+ * checked — and THROWS when `evidence` does not name exactly that set, one
+ * entry per participant, no more and no fewer. See this function's own
+ * body for why throwing, not a refusal value, was chosen.
  */
 export interface ClaimEvidence {
   /** The agent this evidence is ABOUT — usually equal to `claim.agentId`, but see `noLegitimateClaimEvidence` below for the one case where it is deliberately NOT (no legitimate claim exists at all). */
@@ -82,20 +103,75 @@ export interface ClaimEvidence {
  * Combines one conflict's worth of per-agent evidence into the single
  * `AvailableInterventionSet` `arbitrate` expects for that conflict — see
  * this file's header for the intersection policy and why it was chosen
- * over the alternative. An empty `evidence` array (no relevant participant
- * supplied ANY evidence at all — should not occur for a real conflict,
+ * over the alternative, and `.genesis/decisions/0008-incomplete-evidence.md`
+ * for the coverage check below.
+ *
+ * `conflictParticipants` is the conflict's own full, authoritative
+ * participant set (`DetectedConflict.agentIds`, or the identical set a
+ * caller who built the conflict by hand already has) — NEVER derived from
+ * `evidence` itself, because `evidence` being short exactly one participant
+ * is the failure this check exists to catch; deriving the expected set from
+ * the very array being validated would make the check unable to see its own
+ * blind spot.
+ *
+ * FAILS CLOSED BY THROWING (not a refusal return value) when `evidence`
+ * does not name EXACTLY `conflictParticipants` — one `ClaimEvidence` entry
+ * per participant, no fewer (the live defect: a dropped participant makes
+ * the intersection run over fewer sets, which can only make the result
+ * MORE permissive) and no more (an entry for an agent outside the conflict
+ * is equally a sign the two arrays were not built from the same conflict,
+ * and this file's whole discipline is to require the canonical, exact
+ * shape rather than tolerate a partial one — see the ADR for the
+ * `lib/arbitrate/arbitrate.ts` precedent this follows: throwing on a
+ * checkable-from-data-in-hand precondition, such as its own length-mismatch
+ * and duplicate-conflict-id guards). This is a caller bug, not a
+ * legitimate business outcome a typed refusal value would need to express
+ * to a normal, well-behaved caller — see the ADR for the fuller argument.
+ *
+ * An empty `evidence` array PAIRED WITH an empty `conflictParticipants`
+ * (no relevant participant at all — should not occur for a real conflict,
  * since `detectConflicts` only ever names an agent that is genuinely party
  * to the collision) still returns the same unconditional baseline
- * `availableInterventions` itself would, rather than an empty set or a
- * thrown error — `{observe, warn}` is always structurally safe to offer,
- * the same "costs nothing even when technically ungranted" reasoning
- * `arbitrate.ts`'s own disclosed `observe`-fallback uses for a
- * differently-malformed input.
+ * `availableInterventions` itself would, rather than an empty set — this
+ * disclosed fallback is unchanged by this check, since it is the one case
+ * where `evidence` and `conflictParticipants` already agree.
  */
 export function combinedAvailableInterventions(
   evidence: readonly ClaimEvidence[],
+  conflictParticipants: readonly AgentId[],
   now: Timestamp,
 ): AvailableInterventionSet {
+  const participantKeys = conflictParticipants.map((a) => String(a));
+  const participantSet = new Set(participantKeys);
+  if (participantSet.size !== conflictParticipants.length) {
+    throw new Error(
+      `combinedAvailableInterventions: conflictParticipants contains a duplicate agent id (${JSON.stringify(participantKeys)}) — ` +
+        "every participant must be named exactly once.",
+    );
+  }
+
+  const evidenceKeys = evidence.map((one) => String(one.agentId));
+  const evidenceSet = new Set(evidenceKeys);
+  if (evidenceSet.size !== evidence.length) {
+    throw new Error(
+      `combinedAvailableInterventions: evidence contains a duplicate agent id (${JSON.stringify(evidenceKeys)}) — ` +
+        "every participant's evidence must appear exactly once.",
+    );
+  }
+
+  const missing = conflictParticipants.filter((a) => !evidenceSet.has(String(a)));
+  const extra = evidence.filter((one) => !participantSet.has(String(one.agentId)));
+  if (missing.length > 0 || extra.length > 0) {
+    throw new Error(
+      "combinedAvailableInterventions: evidence does not cover this conflict's participants exactly — " +
+        `missing evidence for: [${missing.map(String).join(", ")}]; ` +
+        `evidence supplied for agents outside conflictParticipants: [${extra.map((one) => String(one.agentId)).join(", ")}]. ` +
+        "Every agent in conflictParticipants must have exactly one ClaimEvidence entry, and every ClaimEvidence " +
+        "entry's agentId must be one of conflictParticipants. This function refuses to intersect over fewer sets " +
+        "than the conflict actually has — see .genesis/decisions/0008-incomplete-evidence.md.",
+    );
+  }
+
   if (evidence.length === 0) {
     return new Set<AvailableInterventionKind>(["observe", "warn"]);
   }
