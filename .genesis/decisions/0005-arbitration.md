@@ -1,6 +1,9 @@
 # ADR 0005 — M5 arbitration: the claim-identity ruling, a second gap found while building (`CheckpointId`), a plan defect in `severity`'s own shape, and the never-exceed-the-gate property's actual mechanism
 
-- **Date:** 2026-09-22
+- **Date:** 2026-09-22 (revised the same day, after L4 VERIFY rejected the first version of this PR
+  having found and reproduced a live bypass of the never-exceed-the-gate property's own
+  per-conflict-authorization half — see Decision 8 for the report, the fix, and the correction of an
+  overclaim this ADR's own first version made)
 - **Status:** accepted
 - **Phase / milestone:** M5 (BUILD) — `lib/arbitrate/**`
 
@@ -284,6 +287,104 @@ is selected without being present in the caller's own `available` set; it is nam
 pinned by a real test (`__tests__/arbitrate.test.ts`, "available = {observe} only"), not left for
 a future reader to discover.
 
+## Decision 8 — L4 VERIFY rejected the first version of this milestone: one authorization licensed a forced halt on a genuinely different conflict sharing its id string; fixed as a fail-closed input precondition, not correlation logic
+
+**This milestone's first PR was rejected by independent review, which found and reproduced a live
+bypass of the property this ADR calls the crux (Decision 4).** The report, reproduced verbatim:
+
+```ts
+const c1 = conflict("write-write",       "resource-1", ["agent-a"], "shared-id");
+const c2 = conflict("undeclared-access", "resource-2", ["agent-b"], "shared-id");
+const auth = humanAuthorization("human-1", c1.id);
+arbitrate([c1, c2], [availableSet(["observe","warn"]), availableSet(["observe","warn"])],
+          ["corrupting","corrupting"], [], auth);
+// => BOTH fire kind:"halt", mode:"forced"
+```
+
+`c1` and `c2` are genuinely different collisions — different `kind`, different `resourceId`,
+different `agentIds` — sharing only a `ConflictId` STRING. `matchesConflict`
+(`human-authorization.ts`) is, and remains, pure string equality on `conflictId` — it has no way to
+tell "the same logical conflict, asked about twice" from "two unrelated conflicts a caller happened
+to label identically." An authorization scoped to `c1` therefore also matched `c2`, and both fired
+`halt`/`forced` off the one authorization — the exact "an authorization for a different conflict is
+refused, not silently reused" refusal (plan §4 M5) failing, even though `matchesConflict` itself was
+correct for every input it was ever tested against in isolation (each of this milestone's own
+pre-existing tests used conflicts with genuinely distinct ids).
+
+**Why this is INPUT VALIDATION, not a logic bug in `matchesConflict` or a missing correlation
+check, argued at the strength the report itself demands:** `lib/conflict/detected-conflict.ts`'s own
+`deriveConflictId` (frozen at M3) mints every `ConflictId` DETERMINISTICALLY from `kind + resourceId
++ sorted, deduplicated agentIds` — two conflicts M3 itself ever produces from real claims/heartbeats
+CANNOT collide; a collision requires two different logical facts to hash to the same string, which
+`deriveConflictId`'s own construction rules out for its own output. But `arbitrate`'s signature
+accepts `conflicts: readonly DetectedConflict[]` from ANY caller, not only from `detectConflicts`'s
+own output — and, until this fix, trusted `conflict.id` verbatim, with no check that the ids
+actually behave like ids (unique within the batch) at all. This is precisely the shape of
+precondition this milestone already has a working, accepted precedent for: the
+`conflicts.length === available.length === severities.length` check (Decision 7) fails closed on an
+input shape violation that is fully checkable from data already in hand, before any ruling logic
+runs, rather than trying to make the downstream logic robust to an input that never should have
+been well-formed in the first place.
+
+**Chosen fix — a canonical-form requirement, not correlation machinery:** `arbitrate` now also
+throws if `conflicts.map((c) => String(c.id))` contains a duplicate, checked with one `Set` pass
+immediately after the length precondition, before any conflict is ruled on. **This is the whole
+fix.** `matchesConflict` itself is UNCHANGED.
+
+**Alternative considered and explicitly rejected, per the coordinator's own instruction, and worth
+recording why rather than only that it was rejected: teach `matchesConflict` (or a new check inside
+`ruleOneConflict`) to also compare `resourceId`/`agentIds` between the authorization's target
+conflict and the conflict currently being ruled on.** This would also have closed the reported
+bypass, but was rejected because it is CORRELATION MACHINERY with its own edges, of the identical
+shape this project has already paid for choosing over a canonical-form requirement more than once —
+`.genesis/decisions/0001-contracts.md`'s own history (a hand-rolled scanner chasing an unenumerable
+class of bypasses, five bypasses across five rounds, before the guarantee was RELOCATED to a
+narrower, structurally-checkable property instead of extended again) is the direct precedent this
+milestone is following, not reinventing. A `resourceId`/`agentIds`-comparison check would need its
+own answer to questions a canonical-form requirement never has to ask at all: does a
+`humanAuthorization` for a `write-write` conflict on `{agentA, agentB}` "correlate enough" to also
+license a ruling on a DIFFERENT conflict that shares one of those two agents but not the other, or
+shares the resource but names a third kind? Every one of those questions is a new edge a
+correlation check would have to get right; a uniqueness precondition on the batch's own ids has none
+of them, because it never asks what a correlation IS — it only asks that the caller's own claimed
+identifiers behave like identifiers.
+
+**Correcting an overclaim in this ADR's own first version, per the coordinator's explicit
+instruction not to replace one overclaim with another:** the first version of this ADR's
+Consequences section stated "the per-conflict authorization match... is unit-tested directly and
+end-to-end." That was true only for the case this milestone had thought to test — two conflicts with
+DISTINCT ids — and did not hold for two conflicts sharing an id, which is exactly the case that
+turned out exploitable. The corrected claim, stated at its true strength: **`matchesConflict`'s own
+string-equality check is unit-tested directly and is exactly what its name says — a comparison of
+two `ConflictId` strings, nothing more.** The PROPERTY this milestone actually owes ("an
+authorization for one conflict never licenses another") holds only once `arbitrate`'s OWN
+precondition guarantees every conflict in a batch has a unique id — a fact this milestone now
+enforces structurally (Decision 8, this section) and tests directly (`__tests__/
+human-authorization.test.ts`'s "duplicate conflict id" describe block; `__tests__/
+never-exceed-gate.test.ts`'s dedicated, deliberately-colliding-id sweep, below), not a fact
+`matchesConflict` was ever positioned to guarantee by itself.
+
+**The property test's own generator gap, found and fixed alongside the code:** `never-exceed-
+gate.test.ts`'s original 300-scenario sweep derives every conflict's id from
+`kind-resource-agents` (`buildScenario`), which makes an incidental collision between two generated
+conflicts astronomically unlikely — so 300 passing scenarios were never evidence this axis was
+handled correctly; they simply never exercised it. "A generator that cannot produce the failure is
+not evidence of its absence" (the coordinator's own framing, kept verbatim rather than restated,
+because restating it risked softening the point). Fixed by adding a SECOND, dedicated generator
+(`buildCollidingScenario`) that forces two generated-but-otherwise-independent conflicts to share an
+id on every one of 100 iterations, asserting `arbitrate` throws every time, plus a sanity test
+confirming the forced pair really does differ in `kind`/`resourceId`/`agentIds` (so the sweep is
+proven to be exercising a genuine collision, not a vacuously-identical pair) — the original
+300-scenario sweep is UNCHANGED and continues to prove the ordinary, non-colliding property.
+
+**Falsifiability of this specific fix, run for real:** the precondition was temporarily removed
+(replaced with a comment); `npx vitest run lib/arbitrate` (38 tests) failed exactly **4** — the
+reported bypass's own regression test, its no-authorization variant, the three-conflicts variant,
+and the 100-scenario deliberately-colliding sweep — with the remaining 34 (including the ordinary,
+non-colliding 300-scenario sweep, unaffected) staying green. Restored from a pre-edit backup;
+`npm run typecheck` and `npm test` reconfirmed clean (26 files / 375 tests) before this revision was
+committed.
+
 ## Falsifiability — the experiments actually run against this milestone's own code
 
 **Gutting experiment 1 — always-observe** (`ruleOneConflict` replaced with an unconditional
@@ -340,9 +441,19 @@ least once, so the property's "always holds" result is not vacuously true over a
   paths in `realize`'s own `switch` — one filtered through `available`, one gated on a
   per-conflict-matched authorization and nothing else) AND proven over 300 generated scenarios, not
   a handful of fixtures.
-- Positive: the per-conflict authorization match (`matchesConflict`) is unit-tested directly and
-  end-to-end (`__tests__/human-authorization.test.ts`'s "A cannot license B" case, plus the
-  property test's own dedicated "authorization outside the batch" sweep).
+- Positive (corrected after L4 VERIFY rejected this ADR's first, overclaiming version — see
+  Decision 8): `matchesConflict`'s own string-equality comparison is unit-tested directly. The
+  PROPERTY this milestone actually owes — an authorization for one conflict never licenses another —
+  additionally depends on `arbitrate`'s own duplicate-conflict-id precondition (Decision 8), without
+  which two conflicts sharing an id string defeat the property regardless of how correct
+  `matchesConflict` itself is. Both halves are now tested directly: the distinct-id case
+  (`__tests__/human-authorization.test.ts`'s "A cannot license B" case, and the property test's own
+  "authorization outside the batch" sweep) and the duplicate-id precondition itself (that same
+  file's "a batch with a duplicate conflict id is refused" cases, and
+  `__tests__/never-exceed-gate.test.ts`'s dedicated, deliberately-colliding 100-scenario sweep,
+  distinct from the ORIGINAL 300-scenario sweep, which — found and disclosed in Decision 8 — never
+  exercised this axis at all because its generator derives ids from data that cannot incidentally
+  collide).
 - Positive: three gutting experiments (always-observe, always-escalate, empty-output) each isolated
   a large, non-trivial, and DIFFERENT blast radius (18, 16, and 19 of 32 tests respectively) with no
   compensating fix, and the structural scan's own comparison was independently confirmed
