@@ -11,13 +11,17 @@ two, and this file's own table was generated specifically to avoid repeating tha
 ```
 gh pr list --state all --json number,title,createdAt,mergedAt,headRefName
 gh pr view <n> --json comments,reviews,body
+gh api repos/vladimir-mawla/agent-control-tower/issues/<n>/comments --jq '.[]|{user:.user.login,created_at:.created_at}'
 git log --oneline -20
 git checkout <merge-sha> && npx vitest run   # for every milestone's own test count, below
 ```
 
 ## The 17 pull requests, in order, `mergedAt` not `createdAt`
 
-Every PR in this repository's history was merged — there is no open or closed-unmerged PR. Nine are
+Every one of these 17 PRs was merged — none is open or closed-unmerged. (Scope note: this excludes PR
+#18, the M9 PR this document itself ships in, which is open as of this writing and is not part of the
+17-PR table below — a document describing its own still-open PR as part of a closed history would be
+the same kind of absolute this file exists to avoid.) Nine are
 milestone or fix PRs with real content; eight are `chore(genesis): mark <N> done` bumps to
 `.genesis/DONE.html`, each opened and merged within roughly 30 seconds of the milestone PR ahead of it
 (a ceremonial status update, not build time — separated out below rather than averaged into the
@@ -43,13 +47,22 @@ milestones' own durations, which would understate them).
 | 16 | M8 — Interactive demo | 2026-09-22 19:39:43 | 9:05:08 |
 | 17 | mark M8 done | 2026-09-22 19:41:32 | 0:00:31 |
 
-`gh pr view <n> --json comments` shows exactly one comment on PRs 3–17 and zero on PRs 1–2 — in every
-case it is Vercel's own deploy-preview bot comment, confirmed by reading its body directly (a project
-table and a preview-deployment link), not a human or reviewer comment. **No PR in this repository carries
-a GitHub-native review or a reviewer comment thread** (`reviews: []` on all 17) — the "L4 VERIFY"
-independent-review rounds described below happened as part of this account's own process and are recorded
-in the ADRs and, for M1 only, in edits to the PR body itself (see next section), never as GitHub PR
-comments or reviews.
+**Recounted directly** (`gh api repos/vladimir-mawla/agent-control-tower/issues/<n>/comments`, all 17,
+after an earlier draft of this file wrongly asserted a uniform "exactly one, always the bot" pattern —
+see the correction note below): PRs 1 and 2 carry zero comments. PRs 3–8 and 10–17 (14 PRs) carry
+exactly one comment each, and every one of those 14 is Vercel's own deploy-preview bot, confirmed by
+reading its body directly (a project table and a preview-deployment link). **PR #9 is the one exception,
+and it is not a bot comment: it carries two — the same Vercel bot comment, and a second, substantive,
+human-authored comment from `vladimir-mawla`** posted `2026-09-22T05:54:59Z`, during the M5 fix round —
+its content is primary evidence for the M5 narrative below, not merely counted here. **No PR in this
+repository carries a GitHub-native review** (`reviews: []` on all 17, confirmed independently) — but PR
+#9's second comment shows the "L4 VERIFY" rejection/fix cycle *is* sometimes recorded as an ordinary
+issue comment, not only in an ADR or (M1 only) a PR-body edit. The claim in an earlier draft of this file
+("in every case it is Vercel's own bot... not a human or reviewer comment") was a false absolute,
+produced with the very command this file names as its verification method — three separate universal
+claims ("exactly one," "in every case," "not a human comment") failing at once on the one PR that was
+the exception. Caught before merge; recorded here rather than silently fixed, per this file's own
+purpose.
 
 ## Test count at each milestone's own merge commit, run fresh, not carried forward
 
@@ -101,10 +114,22 @@ inferred from PR body edits, which exist for only one milestone (see below).
   parameter's constraint, and ended the loop by demoting the check's own claim from completeness to
   best-effort recall. PR #7's own body has no round narrative — confirmed directly (`gh pr view 7 --json
   body`, no `## Update` heading), so this count is sourced entirely from the ADR.
-- **M5 — 1 rejection (2 rounds).** `0005-arbitration.md` Decision 8: L4 VERIFY rejected the first version
-  after finding a live bypass (two genuinely different conflicts sharing one `ConflictId` string both
-  fired a forced halt off one authorization); fixed with a fail-closed uniqueness precondition, and this
-  ADR's own first-version overclaim about what was already tested was corrected in the same revision.
+- **M5 — 1 rejection (2 rounds), with primary evidence beyond the ADR: PR #9 itself records the fix
+  round as it happened.** `0005-arbitration.md` Decision 8: L4 VERIFY rejected the first version after
+  finding a live bypass (two genuinely different conflicts sharing one `ConflictId` string both fired a
+  forced halt off one authorization); fixed with a fail-closed uniqueness precondition, and this ADR's
+  own first-version overclaim about what was already tested was corrected in the same revision. PR #9's
+  own second comment (`vladimir-mawla`, `2026-09-22T05:54:59Z` — see the recount above), posted while the
+  PR was still open, names the fix in the author's own contemporaneous words: `arbitrate` "now throws if
+  `conflicts` contains a duplicate id, checked immediately after the existing length precondition,
+  before any ruling is produced," explicitly rejects strengthening `matchesConflict` itself as
+  "correlation machinery with its own edges," records the property-sweep's own generator gap (it "never
+  explored the colliding-id axis") and its fix (a dedicated 100-scenario colliding generator), and gives
+  a falsifiability result matching the ADR's own account (removing the new precondition fails exactly 4
+  regression tests, nothing else) plus a test count (26 files / 375 tests, up from 369) one step more
+  granular than the ADR's own final number. This is the one place in this repository's own PR history
+  where the fix round is documented twice, independently, in two different registers (a comment written
+  in the moment, an ADR written after) — both agree.
 - **M6 — 0 rejections; 3 findings recorded after approval, beyond the milestone's own brief.**
   `0006-domain.md` Decision 4: L4 VERIFY approved M6 as sound, then, independently, wrote a scratch test
   outside the milestone's own scope that hand-constructed a `HaltForced` value bypassing `arbitrate()`
@@ -156,8 +181,7 @@ good as the branch it was checked against, and `find`/`ls` do not report which b
 other cross-repository claim in this milestone's own docs was re-audited the same way after this was
 found — `git -C <repo> rev-parse --abbrev-ref HEAD` and `git -C <repo> rev-parse origin/main`, confirmed
 identical, for `shadow-run`, `decision-engine`, `memory-ledger`, and `agent-trust-layer` — and no other
-claim moved. This section exists because a corrected mistake, recorded honestly, is a stronger process
-record than a first draft that happened not to make one.
+claim moved.
 
 ## What this file deliberately does not do
 
