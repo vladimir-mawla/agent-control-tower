@@ -131,6 +131,34 @@ check against two already-simple functions) and M6's own central findings (Decis
 genuinely compact arguments; line count here tracks argument complexity, not milestone effort (M6's own
 domain code and its five-conflict scenario are not small).
 
+## A cross-repository claim checked against a stale tree, caught before merge
+
+While drafting `docs/ARCHITECTURE.md`, this milestone needed to check
+`~/Desktop/shadow-run/docs/ARCHITECTURE.md` for its structure. `find`/`ls` against that repository's
+working tree found no such file — only `docs/WALKTHROUGH.md`. That result was reported as fact ("the
+file does not exist in that repository") in an earlier draft of `ARCHITECTURE.md` and this PR's own
+description. **It was wrong, and it was wrong for a specific, checkable reason:** `shadow-run`'s working
+tree was checked out to `fix-m3-append-and-tokenizer`, a stale branch left over from that project's own
+M3 — a branch on which `docs/ARCHITECTURE.md` genuinely did not exist yet, because it was added three
+milestones later, by that project's own M9 (`main`, commit `8c7ecd8`, 326 lines). `find` and `ls` were
+accurate about the tree they were pointed at and wrong about the repository, because the tree they were
+pointed at was not `main`.
+
+This was caught before merge, by the coordinator, and corrected here rather than left in place: the
+discrepancy note was removed from `ARCHITECTURE.md`, and that document's own closing section now compares
+shadow-run's real `main` content to `decision-engine`'s on the merits (both have the same base shape;
+shadow-run's own diagram carries a stage-order-is-not-an-import-chain caveat that is true for shadow-run
+and false for this project, which is why this document follows `decision-engine`'s shape instead).
+
+**The general lesson, stated plainly because it is the kind of thing this entire milestone exists to
+catch:** a confident negative claim about another repository's contents ("X does not exist") is only as
+good as the branch it was checked against, and `find`/`ls` do not report which branch that is. Every
+other cross-repository claim in this milestone's own docs was re-audited the same way after this was
+found — `git -C <repo> rev-parse --abbrev-ref HEAD` and `git -C <repo> rev-parse origin/main`, confirmed
+identical, for `shadow-run`, `decision-engine`, `memory-ledger`, and `agent-trust-layer` — and no other
+claim moved. This section exists because a corrected mistake, recorded honestly, is a stronger process
+record than a first draft that happened not to make one.
+
 ## What this file deliberately does not do
 
 It does not average or total the per-milestone durations into a single "total build time" figure — the
