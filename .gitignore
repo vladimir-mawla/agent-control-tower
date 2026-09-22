@@ -1,0 +1,51 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Next.js generates this triple-slash-reference file itself on every
+# `next dev`/`next build`; it's local wiring, not project content.
+next-env.d.ts
+
+# Environment — .env.example IS committed if one is added later; nothing
+# here is expected to hold real values.
+.env
+.env.local
+.env*.local
+
+# Secrets. Nothing in this project needs API keys to run its engine or
+# tests, but an .env inviting real values makes a leak one careless
+# `git add -A` away.
+secrets/
+*.pem
+*.key
+
+# Next.js auto-generates these on every build; they are advisory agent
+# notes, not project content.
+AGENTS.md
+CLAUDE.md
+
+# Editors and OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Deploy
+.vercel
+
+# Test output
+coverage/
+
+# A later milestone's demo build (mirrors decision-engine's, shadow-run's,
+# and memory-ledger's own .demo-build/) will compile lib/+scripts/ here so
+# it can run under plain `node`; ignored from the start since it is always
+# regenerated, never committed.
+.demo-build/
