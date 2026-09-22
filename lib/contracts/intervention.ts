@@ -21,7 +21,10 @@ import type { NonEmptyArray } from "./non-empty-array.js";
  * `__tests__/intervention.test.ts`) or CONVENIENTLY via an ordinary,
  * visibly-named cast (no function anywhere in `lib/` mints a `HumanId`,
  * and `__tests__/human-id.test.ts` resolves every cast's target type
- * through the real checker's own symbol/alias resolution, so aliasing or
+ * through the real checker's own symbol/alias resolution over every `.ts`
+ * file under `lib/` — `__tests__/file-inventory.test.ts` is what makes
+ * "every `.ts` file" and "every file" the same set, by forbidding any
+ * `.d.ts`/`.js`/other-extension file under `lib/` at all — so aliasing or
  * re-exporting the import does not help). That is genuinely useful and
  * genuinely narrow — it is NOT, and is not claimed anywhere in this
  * codebase to be, a guarantee that a `HumanId` cannot be forged at all.

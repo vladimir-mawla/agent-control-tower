@@ -93,12 +93,30 @@
  * checked evidence against the specific, plausible failure mode of an
  * engineer reaching for a visible `as`/`<T>` cast naming this brand,
  * directly or through an ordinary import alias or re-export — not a
- * complete defense, one piece of evidence among several. Where a genuine
- * `HumanId` actually comes from at runtime — a signed-in operator's own
- * session identity, checked at whatever real human-facing boundary M8's
- * demo eventually builds — is deliberately undecided by this milestone;
- * inventing that boundary now, with no consumer yet, would be exactly the
- * unrequested flexibility this account's own standing note warns against.
+ * complete defense, one piece of evidence among several.
+ *
+ * THE SCAN'S INPUT DOMAIN, STATED AS A PROPERTY (round 4, a DIFFERENT
+ * axis from the unsoundness class above — routes A/B are the type CHECKER
+ * accepting something unsafe inside CHECKED `.ts` source; this is about
+ * which FILES the scan ever opens at all): `__tests__/human-id.test.ts`
+ * only ever parses `.ts` files — an ambient `.d.ts` declaration
+ * (`export declare const fakeHuman: HumanId;`) paired with a `.js` file
+ * supplying the real runtime value is invisible to it, not because the
+ * scan is weak against that shape, but because it never reads either file
+ * at all. This is closed not by teaching the scan to also parse `.d.ts`/
+ * `.js` — that would reopen the same open-ended chase on a new axis (a
+ * `.mjs` next, then a `.cjs`) — but by `__tests__/file-inventory.test.ts`,
+ * which makes `lib/**`'s actual, permitted contents exactly the set
+ * `.ts`-only, so no non-`.ts` file can exist under `lib/` for a lie to
+ * hide in. That check is what makes "the scan only reads `.ts` files"
+ * a safe, closed domain statement rather than an unstated assumption.
+ *
+ * Where a genuine `HumanId` actually comes from at runtime — a signed-in
+ * operator's own session identity, checked at whatever real human-facing
+ * boundary M8's demo eventually builds — is deliberately undecided by
+ * this milestone; inventing that boundary now, with no consumer yet,
+ * would be exactly the unrequested flexibility this account's own
+ * standing note warns against.
  */
 declare const humanIdBrand: unique symbol;
 export type HumanId = string & { readonly [humanIdBrand]: "HumanId" };
