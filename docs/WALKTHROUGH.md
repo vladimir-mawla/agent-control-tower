@@ -8,14 +8,19 @@ an actual click-through of `https://agent-control-tower-nine.vercel.app`, re-rea
 ## Timing
 
 - Pure narration (176 words) at a natural, deliberate 150-words-per-minute presenter pace, synthesized
-  with macOS `say -r 150` and measured with `afinfo`: **76.1 seconds**.
+  with macOS `say -r 150` and measured with `afinfo`: **76.1 seconds** on the machine this script was
+  written on. An independent verifier re-ran the identical `say -r 150` command on a different machine
+  and measured **69.7 seconds** for the same 176 words — `say`'s actual output rate depends on the
+  system voice and OS build, not just the `-r` argument, so this figure is a rig-dependent estimate, not
+  a portable constant. Both runs land comfortably under the ~90s target either way.
 - Four on-screen actions (one button click, three radio selections), each needing a moment to move the
   cursor, click, and let the panel visibly update before continuing to speak: estimated **~3 seconds
-  each, ~12 seconds total**.
-- **Honest estimate: ~88 seconds.** This was measured with synthesized speech plus an estimated
-  interaction overhead, not a stopwatch on an actual human recording — an actual presenter's pace will
-  vary a few seconds either way, matching this account's own note that sibling projects' own walkthroughs
-  landed at 90 and 91 seconds by the same kind of estimate, not a guaranteed exact figure.
+  each, ~12 seconds total** — also an estimate, not a measurement of an actual recording.
+- **Honest estimate: roughly 80–90 seconds**, depending on the voice/OS synthesizing (or the actual
+  presenter's own) pace, plus interaction time. Don't be surprised if your own recording comes in a bit
+  under 90s — that's expected variance, not a sign you rushed it, and matches this account's own note
+  that sibling projects' own walkthroughs landed at 90 and 91 seconds by the same kind of estimate, not a
+  guaranteed exact figure.
 
 ## The script
 
