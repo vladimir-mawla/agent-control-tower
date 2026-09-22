@@ -1,11 +1,13 @@
 # ADR 0001 — M1 contracts: alternatives considered, and the two gaps the plan leaves for M3/M4/M5 to close
 
-- **Date:** 2026-09-22 (Decision 2 revised three more times the same day, across three further L4 VERIFY
+- **Date:** 2026-09-22 (Decision 2 revised four more times the same day, across four further L4 VERIFY
   rejections — round 1 found two working bypasses of the original mechanism; round 2's fix closed one and
   correctly narrowed the claim on the other; round 3 found two further routes and ruled out extending the
   scanner further, relocating the actual guarantee instead; round 4 found a file-coverage gap on a
-  different axis, closed by a `.ts`-only inventory check rather than by parsing more file types — see
-  Decision 2 in full)
+  different axis, closed by a `.ts`-only inventory check; round 5 found that round 4's own closure claim
+  was false as written (the identical lie, moved one directory outside `lib/`) and closed it for real with
+  a second, composed check — a closed module graph — rather than a stronger version of the first check —
+  see Decision 2 in full)
 - **Status:** accepted
 - **Phase / milestone:** M1 (BUILD) — `lib/contracts/`
 
@@ -355,6 +357,100 @@ enumerable fact about this repository (which file extensions exist under `lib/`)
 problem with an open-ended, ever-growing parser is strictly worse than an inventory check that makes the
 closed problem's answer "none, by policy" once and for all.
 
+**ROUND 5 — round 4's own closure claim was false as written; the fix is a second, composed check, not a
+stronger version of the first:**
+
+L4 VERIFY confirmed every round-4 artifact independently: the `endsWith`-vs-`extname` distinction real
+and deliberate; the inventory check recursive, extension-precise (`.mts`/`.cts`/no-extension/uppercase/
+hidden dirs/nested dirs all correctly caught), walking `__tests__`, and failing closed (pointing
+`LIB_ROOT` at a nonexistent directory throws `ENOENT` into 3 failing tests, not a silent empty-list
+pass); the round-3 exploit still caught by name; routes A/B re-confirmed still passing, correctly, as
+the disclosure working rather than a defect. It then reported:
+
+```ts
+// scripts/external-human.d.ts   — outside lib/, so the inventory never walks it
+export declare const externalFakeHuman: HumanId;
+// scripts/external-human.js
+export const externalFakeHuman = "smuggled-from-outside-lib-entirely";
+// lib/contracts/attackE.ts      — no cast, no any, no generic
+import { externalFakeHuman } from "../../scripts/external-human.js";
+export const attackE: HumanId = externalFakeHuman;
+```
+
+The identical lie, moved one directory up. `attackE.ts` typechecks clean and `externalFakeHuman` is a
+real runtime string satisfying `assertValidHaltForced`. Round 4's own header claimed "no file left for a
+lie to hide in" — **that claim was false as written**: the inventory check constrains what files may
+exist INSIDE `lib/`; nothing constrained what a `lib/` `.ts` file may IMPORT from anywhere else in the
+repository.
+
+**The fix: make `lib/` a closed module graph, composed with the inventory check rather than replacing
+it.** `__tests__/import-containment.test.ts` requires every import anywhere under `lib/**` (source and
+test — no `__tests__` exemption, for the same reason the inventory check has none: a `.d.ts`/`.js` pair
+hiding inside `__tests__/` would be exactly as dangerous) to resolve either INSIDE `lib/**` or to one of
+`ALLOWED_EXTERNAL_SPECIFIERS` — enumerated by grepping every real import in this milestone's own source
+before writing the list (`node:fs`, `node:os`, `node:path`, `vitest`, `typescript/unstable/sync`,
+`typescript/unstable/ast`), not a speculative allowance. Composed with the inventory check, this is a
+real closure: no non-`.ts` file can exist inside `lib/`, AND no import can reach outside it — there is no
+"one directory up" left for the identical attack to move to again, because up is no longer reachable.
+Neither check closes the axis alone; this ADR states the claim only for the composed pair, per the
+coordinator's own explicit instruction not to repeat a "there is now no way to..." sentence that isn't
+true of what was actually built.
+
+**The trap this file's own design is built around, named directly, because it cost a sibling a round:**
+a sibling project's import-allowlist check once pattern-matched specifier SYNTAX (does the string start
+with `./`/`../`?) and was defeated by `../../node_modules/next/package.json`, which matches that pattern
+while resolving outside the allowed tree — the same shape `attackE`'s own specifier uses, one repo over.
+`import-containment.test.ts` therefore checks CONTAINMENT, never syntax: `resolvesInsideLib` resolves
+every relative specifier to a real, `realpathSync`'d absolute path and compares it against `LIB_ROOT`,
+reusing shadow-run's own two-step method (textual containment, then symlink-resistant real-path
+containment, with the identical leaf-then-directory fallback for this codebase's `.js`-specifier/
+`.ts`-file convention) verbatim rather than reinventing it — proven, not assumed, by porting that
+sibling's own symlink-escape and `node_modules`-escape regression tests into this file and confirming
+both still catch the identical shapes here.
+
+**Import forms covered:** static `import ... from "x"` (including side-effect-only `import "x"`),
+`export ... from "x"` / `export * from "x"` re-exports, `import x = require("x")`, dynamic `import("x")`,
+and a bare `require("x")` call — the closed, finite set of ways TypeScript/JavaScript spells "import a
+module" at all, fixed by the language grammar (unlike the branded-type forgery problem, this set has an
+end, so covering all of it is not scanner-chasing).
+
+**A real, self-inflicted bug found and fixed while building this, worth recording honestly:** the first
+version of `import-containment.test.ts`'s own `scan()` used the shared, long-lived `api` instance for
+its `attackE` exploit-regression test, exactly as `scan()`'s real-code checks do — and failed, reliably
+(reproduced 4/4 runs), because that shared instance's project had already been opened by earlier tests
+in the same file before `attackE.ts` was written to disk, and (per the identical, already-documented
+finding from `human-id.test.ts`'s own construction) does not pick up a file created after its first open.
+Fixed the same way: the exploit-regression test uses its own fresh `API` instance. A second, genuinely
+new bug was found in the same debugging pass: running the full suite (`npm test`, all 13 files) failed
+consistently — not flakily — because Vitest's default `fileParallelism: true` runs different test FILES
+in separate worker processes, and several of this milestone's own test files (`human-id.test.ts`,
+`file-inventory.test.ts`, `import-containment.test.ts`) write and remove real, on-disk scratch files
+inside the SAME shared `lib/contracts/__tests__/` directory as part of their own exploit-regression
+tests — one file's transient scratch write was caught mid-flight by another file's concurrent full-tree
+scan, then vanished (via the other file's own cleanup) before the first file's `analyzeFile` could open
+it. Fixed by setting `fileParallelism: false` in `vitest.config.ts`, confirmed by running the full suite
+four consecutive times after the fix (all green) versus three consecutive times before it (all failing
+identically, not intermittently) — a real correctness fix for this milestone's own test infrastructure,
+not a scope creep into unrelated config: without it, `npm test` — the exact command this milestone's own
+verification section asks for — did not reliably pass at all.
+
+**Falsifiability, proved live and externally, exactly as requested:** the verifier's own `attackE` trio
+was landed verbatim in this repository (`scripts/external-human.d.ts`, `scripts/external-human.js`,
+`lib/contracts/attackE.ts`), `npm run typecheck` was confirmed to stay clean (matching the report), and
+`npm test` was confirmed to FAIL, naming `lib/contracts/attackE.ts` and its exact offending specifier
+(`../../scripts/external-human.js`) in the failure output — then all three files were removed and
+`npm test` was confirmed green again. The same trio is also a committed, permanent regression test in
+`import-containment.test.ts`.
+
+**What remains disclosed after this round, stated plainly and, per the coordinator's own framing, as the
+two honest residuals — everything else on this axis (an ordinary cast, aliased or not; a non-`.ts` file
+inside `lib/`; an import reaching outside `lib/`) is now closed:**
+
+1. The type checker's own unsoundness, INSIDE checked `lib/` source (routes A/B, Decision 2 round 3).
+2. A CALLER of this library, outside `lib/` entirely, forging an authorization and passing it in as a
+   parameter (Decision 2 round 3's own relocation argument) — out of scope for every milestone this plan
+   names, and correctly so.
+
 ## Decision 3 — `Conflict` and `ResourceClaim.id`: two shapes the plan does not fully specify, deliberately left open rather than guessed
 
 Two places in the plan pull in different directions, and this milestone chose not to silently resolve
@@ -453,6 +549,21 @@ exhaustive `switch` consuming it anywhere in the milestone is dead code presente
   is `.ts`) rather than an unstated assumption — closing that axis by inventory rather than by teaching
   the scan to also parse `.d.ts`/`.js`/etc. avoids reopening the identical open-ended chase on a new axis,
   one file-type at a time.
+- Positive: `lib/**` is now a closed module graph (round 5) — every import resolves inside `lib/` or to
+  an explicit, enumerated external allowlist, checked by resolving each specifier to a real absolute path
+  (never by pattern-matching its text, the exact trap that cost a sibling project a round). Composed with
+  the file-inventory check, no non-`.ts` file can exist inside `lib/` AND no import can reach outside it —
+  a real closure, stated in the headers/ADR only for the composed pair, per the coordinator's own explicit
+  instruction against restating a "there is now no way to..." claim that isn't true of what was built.
+  Round 4's own closure claim was independently found false as written before this fix — recorded
+  honestly in Decision 2 rather than quietly corrected.
+- Positive: a real, self-inflicted test-infrastructure bug was found and fixed while building round 5 —
+  Vitest's default `fileParallelism: true` made `npm test` fail CONSISTENTLY (not flakily; reproduced 4/4
+  runs before the fix, 4/4 clean after) once multiple architecture-style test files began writing/removing
+  scratch files inside the same shared `lib/contracts/__tests__/` directory concurrently. Fixed by setting
+  `fileParallelism: false` — a correctness fix for this milestone's own verification, not scope creep,
+  since without it the exact `npm test` command this milestone's verification section requires did not
+  reliably pass.
 - Negative / cost: the round-3 relocation means this milestone's own tests cannot yet verify the property
   they name as the actual guarantee (`lib/gate/**`/`lib/arbitrate/**` don't exist) — it is recorded as a
   build requirement for M4/M5 rather than a checked fact, an explicit, named gap rather than a forward
@@ -494,6 +605,16 @@ exhaustive `switch` consuming it anywhere in the milestone is dead code presente
   unenumerable-routes problem (routes A/B), reopening the identical open-ended chase one file-type at a
   time. Closed instead with `__tests__/file-inventory.test.ts`, an inventory check making every file
   under `lib/` `.ts`-only by policy.
+- Strengthening the file-inventory check itself to somehow also catch an outside-`lib/` `.d.ts`/`.js`
+  pair (Decision 2, round 5) — not viable even in principle: a check that only ever walks `lib/` cannot
+  see a file outside it by any amount of strengthening. Closed instead with a second, independent check
+  (`__tests__/import-containment.test.ts`, a closed module graph) composed with the first, rather than
+  papering over the gap by widening what "the inventory check" claims to do.
+- Pattern-matching import specifier syntax (does it start with `./`/`../`?) as the sole import-containment
+  check (Decision 2, round 5) — this is the exact trap that cost a sibling project a round: a specifier
+  can match that pattern while resolving outside the allowed tree via enough `../` segments. Checked
+  containment by resolving to a real, `realpathSync`'d absolute path instead, reusing that sibling's own
+  proven two-step method rather than reinventing a weaker one.
 - Guessing `Conflict`'s and `ResourceClaim`'s missing `id` fields now, before `lib/conflict/**` exists to
   verify the guess (Decision 3) — risks freezing a wrong shape into a file that cannot be unfrozen
   cheaply.
