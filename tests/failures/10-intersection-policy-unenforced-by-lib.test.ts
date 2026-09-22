@@ -46,11 +46,12 @@ describe("FAILURE CASE 10 — the intersection policy that keeps quarantine hone
   const checkpoint = buildCheckpoint({ reachable: false });
 
   it("used correctly, the real combinedAvailableInterventions withholds quarantine — this is the property being bypassed below, proven to hold when the real function is actually called", () => {
+    const conflict = buildConflict("write-write", "resource-1", ["low-evidence-agent", "strong-evidence-agent"]);
     const evidence: readonly ClaimEvidence[] = [
       { agentId: agentId("low-evidence-agent"), claim: selfReportedClaim, checkpoint },
       { agentId: agentId("strong-evidence-agent"), claim: verifiedClaim, checkpoint },
     ];
-    const correctlyCombined = combinedAvailableInterventions(evidence, timestamp(T0));
+    const correctlyCombined = combinedAvailableInterventions(evidence, conflict.agentIds, timestamp(T0));
     expect(correctlyCombined.has("quarantine")).toBe(false);
   });
 

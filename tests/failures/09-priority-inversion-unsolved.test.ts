@@ -56,7 +56,7 @@ describe("FAILURE CASE 9 — priority inversion is not merely unsolved automatic
       { agentId: agentId("low-priority-agent"), claim: lowPriorityClaim, checkpoint },
       { agentId: agentId("high-priority-remediation"), claim: highPriorityClaim, checkpoint },
     ];
-    const combined = combinedAvailableInterventions(evidence, timestamp(T0));
+    const combined = combinedAvailableInterventions(evidence, conflict.agentIds, timestamp(T0));
     expect(combined.has("quarantine")).toBe(false);
 
     const [ruling] = arbitrate(
@@ -81,7 +81,7 @@ describe("FAILURE CASE 9 — priority inversion is not merely unsolved automatic
       { agentId: agentId("low-priority-agent"), claim: bothStrongLow, checkpoint },
       { agentId: agentId("high-priority-remediation"), claim: bothStrongHigh, checkpoint },
     ];
-    const combined = combinedAvailableInterventions(evidence, timestamp(T0));
+    const combined = combinedAvailableInterventions(evidence, conflict.agentIds, timestamp(T0));
     expect(combined.has("quarantine")).toBe(true); // now realizable at all
 
     const [ruling] = arbitrate(

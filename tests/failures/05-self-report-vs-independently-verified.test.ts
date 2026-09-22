@@ -62,7 +62,7 @@ describe("FAILURE CASE 5 — a stronger co-participant's evidence never vouches 
       { agentId: agentId("agent-a"), claim: selfReportedClaim, checkpoint },
       { agentId: agentId("agent-b"), claim: verifiedClaim, checkpoint },
     ];
-    const combined = combinedAvailableInterventions(evidence, timestamp(T0));
+    const combined = combinedAvailableInterventions(evidence, [agentId("agent-a"), agentId("agent-b")], timestamp(T0));
     // The group's own ceiling is set by the WEAKEST participant, not the
     // strongest — B's independently-verified evidence does not "vouch for"
     // A's self-report.
@@ -77,6 +77,7 @@ describe("FAILURE CASE 5 — a stronger co-participant's evidence never vouches 
         { agentId: agentId("agent-a"), claim: selfReportedClaim, checkpoint },
         { agentId: agentId("agent-b"), claim: verifiedClaim, checkpoint },
       ],
+      [agentId("agent-a"), agentId("agent-b")],
       timestamp(T0),
     );
     const [ruling] = arbitrate(
