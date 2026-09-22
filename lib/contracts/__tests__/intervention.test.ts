@@ -275,4 +275,37 @@ describe("assertValidHaltForced — the parallel RUNTIME guard against an unsafe
       expect(result.error.kind).toBe("missing-conflict-id");
     }
   });
+
+  /**
+   * DISCLOSED, ACCEPTED LIMIT — not a bug, and not silently discovered:
+   * independent verification (L4 VERIFY) reported this EXACT value as a
+   * "working bypass" of `halt`/`forced`'s authorization requirement:
+   *
+   *     export const attack1: HaltForced = {
+   *       kind: "halt", mode: "forced",
+   *       authorizedBy: "not-a-real-human", conflictId: "fake-conflict",
+   *     } as unknown as HaltForced;
+   *
+   * `assertValidHaltForced(attack1)` returning `{ ok: true }` is CORRECT
+   * behavior for what this function actually checks (both fields present
+   * and non-empty — see the function's own doc comment, rewritten after
+   * this report to state that scope honestly) — the report's framing that
+   * this was a defect has been narrowed, not the code: no field-presence
+   * check, and no TypeScript design at all, can distinguish a genuine
+   * human authorization from a fabricated string once the whole object
+   * was reached via `as unknown as X`. This test pins that fact as an
+   * intentional, accepted limit — see `.genesis/decisions/
+   * 0001-contracts.md` Decision 2 for the full incident report — so a
+   * future reader finds a passing, documented test here instead of
+   * rediscovering the same "bypass."
+   */
+  it("DISCLOSED LIMIT: a fully-formed cast with fabricated (but present, non-empty) fields is NOT caught — reproduces the exact reported bypass", () => {
+    const attack1 = {
+      kind: "halt",
+      mode: "forced",
+      authorizedBy: "not-a-real-human",
+      conflictId: "fake-conflict",
+    } as unknown as HaltForced;
+    expect(assertValidHaltForced(attack1)).toEqual({ ok: true });
+  });
 });
