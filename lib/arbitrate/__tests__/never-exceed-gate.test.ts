@@ -147,6 +147,56 @@ describe("never-exceed-the-gate — property-based proof over 300 generated scen
   });
 });
 
+/**
+ * L4 VERIFY REPORTED THAT THIS SWEEP, AS ORIGINALLY WRITTEN, NEVER
+ * EXPLORED THE EXACT AXIS THAT TURNED OUT EXPLOITABLE: every generated
+ * conflict's own id is derived from `kind-resource-agents`
+ * (`buildScenario` above), which makes two conflicts in the same
+ * scenario landing on an identical id astronomically unlikely — so 300
+ * passing scenarios were never evidence that a COLLIDING id is handled
+ * correctly, only that one never happened to occur. "A generator that
+ * cannot produce the failure is not evidence of its absence" — the
+ * coordinator's own words, kept verbatim because restating them would
+ * risk softening the point. This describe block generates the collision
+ * DELIBERATELY, on every iteration, rather than hoping for one.
+ */
+function buildCollidingScenario(rand: () => number): Scenario {
+  const base = buildScenario(rand);
+  // Guarantee at least 2 conflicts, then force the second one's `id` to
+  // equal the first's, while leaving its `kind`/`resourceId`/`agentIds`
+  // exactly as generated — a genuinely different collision, sharing only
+  // the id string, the precise shape of the reported bypass.
+  const first = base.conflicts[0]!;
+  const second = base.conflicts[1] ?? conflict("undeclared-access", "resource-99", ["agent-z"], "placeholder-second");
+  const collidingSecond: DetectedConflict = { ...second, id: first.id };
+  const conflicts = [first, collidingSecond, ...base.conflicts.slice(2)];
+  const available = base.available.length >= conflicts.length ? base.available : [...base.available, ...base.available.slice(0, conflicts.length - base.available.length)];
+  const severities = base.severities.length >= conflicts.length ? base.severities : [...base.severities, ...base.severities.slice(0, conflicts.length - base.severities.length)];
+  return { ...base, conflicts, available: available.slice(0, conflicts.length), severities: severities.slice(0, conflicts.length) };
+}
+
+describe("the duplicate-conflict-id axis — deliberately explored, not left to chance", () => {
+  it("100 deliberately-colliding generated scenarios are ALL refused before any ruling is produced, naming the colliding id", () => {
+    for (let seed = 1; seed <= 100; seed++) {
+      const rand = mulberry32(seed);
+      const scenario = buildCollidingScenario(rand);
+      const collidingId = String(scenario.conflicts[0]!.id);
+      expect(() => arbitrate(scenario.conflicts, scenario.available, scenario.severities, scenario.participants, scenario.humanAuthorization)).toThrow(
+        new RegExp(`duplicate conflict id.*${collidingId.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"),
+      );
+    }
+  });
+
+  it("sanity: the forced-collision generator really does produce two conflicts with the same id but different kind/resourceId/agentIds (not a vacuous 'always throws anyway' generator)", () => {
+    const rand = mulberry32(1);
+    const scenario = buildCollidingScenario(rand);
+    const [c1, c2] = scenario.conflicts;
+    expect(c1!.id).toBe(c2!.id);
+    const genuinelyDifferent = c1!.kind !== c2!.kind || String(c1!.resourceId) !== String(c2!.resourceId) || String(c1!.agentIds) !== String(c2!.agentIds);
+    expect(genuinelyDifferent).toBe(true);
+  });
+});
+
 describe("sanity: the generator actually exercises every rung and every rule at least once across the sweep (a passing property test isn't vacuous)", () => {
   it("touches every ArbitrationRule and every non-forced rung at least once, and forced at least once", () => {
     const seenRules = new Set<string>();

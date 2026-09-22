@@ -77,3 +77,66 @@ describe("arbitrate — an authorization for conflict A must not license a force
     }
   });
 });
+
+/**
+ * L4 VERIFY REPORTED A LIVE BYPASS OF THE PROPERTY ABOVE: two conflicts
+ * that are genuinely different collisions (different `kind`, different
+ * `resourceId`, different `agentIds`) but that a caller — not M3's own
+ * `deriveConflictId`, which cannot produce this shape — handed to
+ * `arbitrate` sharing the SAME `ConflictId` string. `matchesConflict` is
+ * pure string equality on `conflictId`, so an authorization scoped to one
+ * of them matched BOTH, and both fired `halt`/`forced`. See
+ * `.genesis/decisions/0005-arbitration.md` Decision 8 for why this is
+ * fixed as a fail-closed INPUT precondition inside `arbitrate` itself
+ * (every conflict in one batch must have a unique id), not by teaching
+ * `matchesConflict` to also compare `resourceId`/`agentIds`.
+ */
+describe("arbitrate — a batch with a duplicate conflict id is refused outright, never silently arbitrated (the reported bypass, reproduced verbatim)", () => {
+  it("REGRESSION: two genuinely different conflicts sharing one ConflictId string used to both fire halt/forced off a single authorization — now refused before either is ruled on", () => {
+    const c1 = conflict("write-write", "resource-1", ["agent-a"], "shared-id");
+    const c2 = conflict("undeclared-access", "resource-2", ["agent-b"], "shared-id");
+    const auth = humanAuthorization("human-1", c1.id);
+
+    expect(() =>
+      arbitrate(
+        [c1, c2],
+        [availableSet(["observe", "warn"]), availableSet(["observe", "warn"])],
+        ["corrupting", "corrupting"],
+        [],
+        auth,
+      ),
+    ).toThrow(/duplicate conflict id/i);
+  });
+
+  it("a duplicate id is refused even with no humanAuthorization in play at all — this is a batch-shape precondition, not merely an authorization guard", () => {
+    const c1 = conflict("write-write", "resource-1", ["agent-a"], "shared-id");
+    const c2 = conflict("undeclared-access", "resource-2", ["agent-b"], "shared-id");
+
+    expect(() =>
+      arbitrate([c1, c2], [availableSet(["observe", "warn"]), availableSet(["observe", "warn"])], ["corrupting", "corrupting"], []),
+    ).toThrow(/duplicate conflict id/i);
+  });
+
+  it("three conflicts with only two sharing an id are still refused, naming the offending id", () => {
+    const c1 = conflict("write-write", "resource-1", ["agent-a"], "id-x");
+    const c2 = conflict("write-read", "resource-2", ["agent-b"], "id-y");
+    const c3 = conflict("undeclared-access", "resource-3", ["agent-c"], "id-x");
+
+    expect(() =>
+      arbitrate(
+        [c1, c2, c3],
+        [availableSet(["observe", "warn"]), availableSet(["observe", "warn"]), availableSet(["observe", "warn"])],
+        ["benign", "benign", "benign"],
+        [],
+      ),
+    ).toThrow(/id-x/);
+  });
+
+  it("distinct ids across genuinely different conflicts are unaffected — the precondition never fires on the ordinary, non-colliding case", () => {
+    const conflictA = conflict("undeclared-access", "resource-a", ["agent-a"], "conflict-A");
+    const conflictB = conflict("undeclared-access", "resource-b", ["agent-b"], "conflict-B");
+    expect(() =>
+      arbitrate([conflictA, conflictB], [availableSet(["observe", "warn"]), availableSet(["observe", "warn"])], ["benign", "benign"], []),
+    ).not.toThrow();
+  });
+});
