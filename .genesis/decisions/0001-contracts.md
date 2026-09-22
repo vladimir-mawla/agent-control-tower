@@ -1,7 +1,9 @@
 # ADR 0001 — M1 contracts: alternatives considered, and the two gaps the plan leaves for M3/M4/M5 to close
 
-- **Date:** 2026-09-22 (Decision 2 revised same day, after L4 VERIFY rejected this milestone's first PR
-  having found and run two working bypasses — see Decision 2 for the full incident report)
+- **Date:** 2026-09-22 (Decision 2 revised twice more the same day, across two further L4 VERIFY
+  rejections — round 1 found two working bypasses of the original mechanism; round 2's fix closed one and
+  correctly narrowed the claim on the other, then round 3 found two further routes and ruled out
+  extending the scanner further, relocating the actual guarantee instead — see Decision 2 in full)
 - **Status:** accepted
 - **Phase / milestone:** M1 (BUILD) — `lib/contracts/`
 
@@ -151,11 +153,9 @@ is the same "no TypeScript design can stop a deliberate cast" property the type 
 accepts as an honest, disclosed limit (decision-engine's own honest-limits section: a brand "stops an
 accidental assignment, not a deliberate cast") — restated here, once, at exactly its true strength, per
 this account's own standing note against restating a disclosed limit more strongly than it holds. The
-claim this milestone actually makes, everywhere it is stated (`intervention.ts`'s header,
-`assertValidHaltForced`'s doc comment, this ADR): the type system makes an unauthorized `halt`/`forced`
-impossible to construct *accidentally* or *conveniently*; reaching one requires writing a deliberate,
-visible unsafe cast in `lib/` source — a reviewable act that looks exactly like what it is, not something
-a policy check catches later.
+claim this milestone made at THIS point (round 2) — "reaching one requires writing a deliberate, visible
+unsafe cast in `lib/` source" — was itself still too strong, in the harmful direction, and was corrected
+again in round 3 below.
 
 **Real falsifiability incidents recorded for both fixes, not just described:** for Bypass 2's fix, the
 new checker-based scan's own `resolveToOriginalSymbol` alias-following step was temporarily reverted to
@@ -171,6 +171,112 @@ governing file's prose and failed `npm test` on the very first run — correct b
 by rewording the comments; the rebuilt checker-based scan closes this class of false positive
 structurally (comments are not part of the AST at all, confirmed by a dedicated test), rather than
 merely by careful wording a second time.
+
+**ROUND 3 — two more working routes, ruled out as a target for further scanning, and the guarantee
+relocated instead of the claim narrowed a third time:**
+
+L4 VERIFY confirmed round 2's checker-based scan against attacks it had not been tested against
+(re-export chains, a parenthesized cast target, a real broken file for the fail-closed path, a real
+comment for the false-positive path) and confirmed the round-2 claim narrowing was judged correct on the
+merits. It then reported two further routes, neither disclosed anywhere at the time, both minting a bare
+`HumanId` with NO cast expression naming the brand at all:
+
+```ts
+// Route A — no cast syntax at all
+function getRaw(): any { return "definitely-not-a-human"; }
+export const attack3: HumanId = getRaw();
+export const attack3b: HumanId = JSON.parse('"also-not-a-human"');
+
+// Route B — generic helper, brand named only at the call site
+function unsafeCast<T>(x: unknown): T { return x as T; }
+export const attack4: HumanId = unsafeCast<HumanId>("nobody-authorized-this");
+```
+
+Both typecheck with zero diagnostics (confirmed directly via `Program.getSemanticDiagnostics`, not
+assumed) and are structurally invisible to `findHumanIdReferenceIn`: route A has no `AsExpression`/
+`TypeAssertion` node at all (`any` is assignable to anything with no assertion needed); route B's own
+cast targets its generic parameter `T`, and `HumanId` appears only as a type ARGUMENT at the call site —
+a position the scan, which walks a cast's own target type node, never visits.
+
+**The coordinator's ruling, adopted without reservation: do not extend the scanner again.** The
+reasoning is the same lesson `human-id.ts`'s own header now states directly — TypeScript is deliberately
+unsound (`any` is a designed escape hatch; a generic instantiated at its call site needs no cast naming
+the brand anywhere; `JSON.parse`, `Object.assign`, and declaration merging are further members of the
+same open-ended class) — and the set of routes from an arbitrary value to a branded type is NOT
+enumerable. This is the identical shape shadow-run's own architecture-test header already documents
+paying for once, at a smaller scale (six rounds, five bypasses, ended only by deleting a hand-rolled
+tokenizer for the real compiler) — except HERE, the "real compiler" fix (round 2, closing Bypass 2) was
+never going to be the last word either, because the remaining gap is not a parsing weakness a better
+parser can close; it is a property of what TypeScript is willing to check at all. Chasing routes A and B
+with more AST cases would not close the class — it would produce a scan that closes today's known routes
+and, by continuing to claim "the type system prevents forgery," launders an absolute claim a fifth route
+would just as easily disprove. **Two things follow, and both were done, not just one:**
+
+**1. The claim was corrected a third time, this time to name the SHAPE of the limit, not a growing list
+of examples.** `intervention.ts`'s header and `human-id.ts`'s header were rewritten to state plainly:
+the type system and this project's checks make an unauthorized `halt`/`forced` impossible to construct
+*accidentally* (a required field) or via an ordinary, *visibly-named* cast (the checker-based scan,
+alias-resistant); routes A and B are named explicitly as two EXAMPLES of an unenumerable class this
+project does not claim to have closed, will not claim to close later, and will not chase further no
+matter what a next verifier invents. `__tests__/human-id.test.ts` gained a "DISCLOSED LIMIT (not a
+check)" describe block that reproduces both routes verbatim, confirms `findHumanIdReferenceIn` finds
+nothing for either (locking in the gap with a real assertion, not just a claim), and confirms via
+`Program.getSemanticDiagnostics` that both really do typecheck with zero diagnostics — the gap is real,
+not hypothetical, and a future reader finds a passing, documented test here rather than rediscovering it
+a third time.
+
+**2. The guarantee itself was relocated, and this is the substantive fix, not documentation:** this
+project does NOT rest `halt`/`forced`'s actual safety on "nobody can forge a `HumanId`" — that claim is
+unenforceable in this language by construction, so anchoring the project's central design commitment to
+it guarantees a permanent, widening gap between what this file says and what the code can prove (exactly
+the pattern of all three rounds so far). The claim this project actually relies on is a property of CODE
+THIS PROJECT CONTROLS rather than of a value's provenance, which it cannot control once `any`/generics/
+`JSON.parse` are in play: **no module under `lib/` ever mints a `HumanId`, or assembles a `halt`/`forced`
+`Intervention` from scratch — the only way `lib/`'s own code may ever produce one is by copying
+`authorizedBy`/`conflictId` verbatim from a value handed in by that code's OWN CALLER, across the
+library's boundary.** A forged `HumanId` a caller constructs and passes in is that caller's lie, told
+outside this library, not a lie `lib/` told about itself — which is the one failure mode this whole
+project exists to refuse (plan §1: "the tower decides what to do... using only what that process chooses
+to report about itself"). Argued for, not merely asserted, because it is worth being explicit about why
+this is the right fix rather than a rationalization after being told to stop scanning:
+
+- It is **actually enforceable**, unlike brand-forgery-resistance: "does this function's own source ever
+  construct a `HumanId` literal or assemble a `halt`/`forced` object without reading both fields off one
+  of its own parameters" is a closed, checkable fact about a finite amount of code this project writes —
+  not an open-ended question about every value that might ever flow into it from anywhere in the
+  TypeScript ecosystem.
+- **This is not a new idea invented to escape round 3** — the plan already commits to exactly this shape
+  for the gate (M4, plan §4): "to ever include `halt`/`forced` in its output at all — the return type has
+  structurally no slot for it, because this engine has no channel to a human and must not manufacture
+  authorization," checked by "a source-scan test... that greps this package's return type declarations
+  and fails the build if `\"forced\"` appears anywhere in `lib/gate/**`'s non-test source — proving the
+  omission is structural, not merely untested." M5's own refusal list (plan §4) states the analogous,
+  slightly weaker rule for `arbitrate`, which DOES need to select `forced` given a valid authorization:
+  "to produce `halt`/`forced` without a `humanAuthorization` whose `conflictId` matches the specific
+  conflict being ruled on" — i.e. `arbitrate` may only copy fields from an authorization it received, never
+  mint one. This ADR's relocation is that same idea, made explicit as THIS milestone's own design
+  commitment rather than something a reader has to infer by cross-referencing two other milestones'
+  refusal lists.
+- **It correctly attributes the remaining risk.** A caller (a future M6 domain script, or M8's demo)
+  could still construct a forged `HumanId` and pass it to `arbitrate` as part of a fabricated
+  `humanAuthorization` — this project does not claim otherwise, and stating so is more honest than
+  implying the brand makes that impossible. Verifying that an incoming authorization is genuine (a real
+  signature, a real session check) is real I/O this pure `lib/` deliberately does not have
+  (`.genesis/PLAN.md`'s own "no real I/O in lib" discipline) and is out of scope for every milestone this
+  plan names. The claim this project makes is narrower than "no forgery anywhere" and, unlike that claim,
+  actually true: the TOWER's own code never manufactures an authorization on its own initiative. A caller
+  lying to the tower is a different, smaller, and correctly-owned problem than the tower lying to itself.
+
+**Honest scope of what M1 itself can check today, stated plainly:** M1 builds no engines — `lib/gate/**`
+and `lib/arbitrate/**` do not exist yet, so the relocated property has no M4/M5 code to verify against
+yet. This ADR records it as a BUILD REQUIREMENT for those milestones (M4's own version is already named
+verbatim in the plan; M5's analogous scan is described above for that milestone to build and prove when
+it exists), not as a claim this file makes about code that isn't there — the same "do not write a
+forward promise into a header that a later milestone may not keep" discipline this account has been
+burned by twice already on other projects. What M1's own tests check today, and only this: no minting
+function exists in `lib/contracts` (true, checked), and no ordinary, visibly-named cast into `HumanId`
+appears anywhere in this milestone's own non-test source (true, checked, and unsurprising — this
+milestone has no engine code to write one in either).
 
 ## Decision 3 — `Conflict` and `ResourceClaim.id`: two shapes the plan does not fully specify, deliberately left open rather than guessed
 
@@ -246,18 +352,27 @@ exhaustive `switch` consuming it anywhere in the milestone is dead code presente
 
 - Positive: `halt`/`forced`'s authorization requirement is enforced at three independent layers — the
   required-field type check (stops accidental construction), the missing-minting-function structural gap
-  now backed by a real symbol-resolving checker scan (stops convenient construction, including through an
-  aliased or re-exported import), and `assertValidHaltForced`'s runtime guard (stops a cast that drops or
-  blanks a field entirely) — each catching a failure mode the layer below it cannot, and none of the three
-  claimed, after L4 VERIFY's review, to stop a fully-formed cast written deliberately through `unknown` at
-  the outer type. That remaining gap is disclosed by name in Decision 2, not papered over.
+  now backed by a real symbol-resolving checker scan (stops an ordinary, visibly-named cast, including
+  through an aliased or re-exported import), and `assertValidHaltForced`'s runtime guard (stops a cast
+  that drops or blanks a field entirely) — each catching a failure mode the layer below it cannot. None of
+  the three is claimed, anywhere in this codebase, to stop every route from a raw value to `HumanId` —
+  that class is not enumerable (routes A/B, Decision 2 round 3) — and the project's actual safety claim
+  for `halt`/`forced` is relocated to a property of `lib/`'s own code (never mints one; only ever copies
+  fields from its caller) rather than of a value's provenance. That relocation, and the residual risk it
+  does not and cannot close (a caller lying to the tower), are both disclosed by name in Decision 2, not
+  papered over.
 - Positive: real falsifiability experiments were run against this milestone's own code throughout (not
   just described) and are recorded in the PR report: deleting the stand-in `"reassign"` case broke
   `npm run typecheck` with `TS2345` at the exact line predicted; weakening `assertValidHaltForced` to skip
-  its `conflictId` check broke exactly one test with a clear assertion mismatch; and, after L4 VERIFY's
-  review, reverting the new checker scan's alias-following broke six tests including plain, un-aliased
-  cross-file casts — confirming alias-following is load-bearing for the whole mechanism, not an edge-case
-  add-on. None was a false pass.
+  its `conflictId` check broke exactly one test with a clear assertion mismatch; reverting the checker
+  scan's alias-following broke six tests including plain, un-aliased cross-file casts, confirming it is
+  load-bearing, not an edge-case add-on; and routes A/B (round 3) were confirmed, not assumed, to produce
+  zero TypeScript diagnostics via `Program.getSemanticDiagnostics` before being pinned as a disclosed
+  limit. None was a false pass.
+- Negative / cost: the round-3 relocation means this milestone's own tests cannot yet verify the property
+  they name as the actual guarantee (`lib/gate/**`/`lib/arbitrate/**` don't exist) — it is recorded as a
+  build requirement for M4/M5 rather than a checked fact, an explicit, named gap rather than a forward
+  promise dressed as already-enforced.
 - Negative / cost: `Conflict` and `ResourceClaim` do not yet carry an `id` field despite `Intervention`
   and `.genesis/DONE.html` presuming one exists somewhere reachable — M3 inherits an explicit, named gap
   instead of a guessed answer that might have been wrong. This is treated as the correct trade at this
@@ -283,6 +398,12 @@ exhaustive `switch` consuming it anywhere in the milestone is dead code presente
   `authorizedBy`+`conflictId`) to try to catch Bypass 1 (Decision 2) — any check computable from data the
   function already holds is a check an attacker with `as unknown as X` access could compute identically;
   would be theater, not defense.
+- Extending the checker-based scan a further round to catch routes A/B (`any`, a generic instantiated at
+  its call site) (Decision 2, round 3) — explicitly ruled out: the set of routes from a raw value to a
+  branded type is not enumerable, so a scan chasing them can only ever close today's known routes while
+  continuing to claim more than it can prove — the same pattern that cost a sibling project six rounds and
+  five bypasses on one function. Relocated the actual guarantee to a property of `lib/`'s own code instead
+  (see Decision 2, round 3, for the argument in full).
 - Guessing `Conflict`'s and `ResourceClaim`'s missing `id` fields now, before `lib/conflict/**` exists to
   verify the guess (Decision 3) — risks freezing a wrong shape into a file that cannot be unfrozen
   cheaply.
