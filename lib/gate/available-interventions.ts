@@ -35,13 +35,20 @@ import { isCheckpointFresh } from "./clock.js";
  * produce one even via a typo, because there is nothing here spelled
  * closely enough to typo INTO. This is a property of the type declaration
  * itself, checked by `@ts-expect-error` in this milestone's own test
- * suite (assigning that mode's own name to this type must not compile),
- * and independently reconfirmed by a source-scan test
- * (`__tests__/architecture.test.ts`) that fails the build if that mode's
- * own name appears anywhere in this package's non-test source at all —
- * see that test file's own header for why a plain text scan is the right
- * tool here, unlike `lib/contracts/__tests__/human-id.test.ts`'s
- * compiler-symbol approach.
+ * suite (assigning that mode's own name to this type must not compile) —
+ * this type-level exclusion, plus this function's own signature carrying
+ * no `Intervention`-typed parameter at all, is what this project's actual
+ * safety claim rests on. Two source-scan tests reconfirm narrower,
+ * differently-scoped facts on top of that: `__tests__/architecture.
+ * test.ts` fails the build if that mode's own name appears literally,
+ * as text, anywhere in this package's non-test source; `__tests__/
+ * type-leak.test.ts` independently fails the build if any type
+ * annotation's own RESOLVED type includes that mode's literal even when
+ * reached by computation (`Extract`, an indexed access, a conditional
+ * type) with no matching text anywhere — a distinct, decidable question
+ * neither `architecture.test.ts` nor a plain grep can answer. See
+ * `.genesis/decisions/0004-gate.md` Decision 6 for why this milestone
+ * needed both, after independent review found a real gap between them.
  *
  * WHAT THIS MEANS FOR THE OBLIGATION THIS MILESTONE INHERITS FROM M1:
  * `.genesis/decisions/0001-contracts.md` Decision 2 states the project's

@@ -69,6 +69,20 @@ import { join, relative } from "node:path";
  * here. See `.genesis/decisions/0004-gate.md` for this argument made in
  * full, including why it was not assumed without being checked.
  *
+ * CORRECTED AFTER INDEPENDENT REVIEW: an earlier version of this header
+ * treated "immune to aliasing" as "sufficient." It is not — a THIRD
+ * mechanism, distinct from both aliasing and runtime string assembly,
+ * also reaches the forbidden literal with no matching text anywhere in
+ * source: type COMPUTATION (`Extract`, an indexed access, a conditional
+ * type) can resolve a plainly-named, ordinary type alias to include the
+ * literal without ever spelling it. Unlike the routes disclosed below,
+ * that one is DECIDABLE, not open-ended, and this milestone closed it
+ * with a second, differently-scoped checker-based test,
+ * `__tests__/type-leak.test.ts` — see `.genesis/decisions/0004-gate.md`
+ * Decision 6 for the corrected argument in full. This file's own scope
+ * remains exactly what its title says: literal, textual occurrences —
+ * never claimed, after this correction, to be the whole story on its own.
+ *
  * CASE-INSENSITIVE, DELIBERATELY, BEYOND WHAT THE PLAN'S OWN QUOTED TEXT
  * STRICTLY REQUIRES: matching only the exact lowercase spelling would let
  * a trivial `"Forced"`/`"FORCED"` slip through on a technicality that
