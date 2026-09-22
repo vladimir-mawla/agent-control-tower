@@ -122,6 +122,24 @@ import { API, isStringLiteralType, isUnionType, type Project, type Type } from "
  * route and confirms, with a real, passing assertion, that it is not
  * caught.
  *
+ * A SECOND, SEPARATE DISCLOSED LIMIT, FOUND WHILE L4 VERIFY TESTED THE
+ * DEMOTED CLAIM ITSELF (ROUND 4) — NOT A DEFECT, EXACTLY WHAT A
+ * BEST-EFFORT RECALL CLAIM PREDICTS AND SURVIVES: `typeContainsForbiddenLiteral`
+ * (below) recurses into UNIONS only. A COMPOUND type this file's
+ * declaration-level resolution does not further unwrap — an object type
+ * with the literal on a property, an intersection, and (CONFIRMED, not
+ * hypothetical) an ARRAY or TUPLE type such as
+ * `Extract<Intervention, { kind: "halt" }>["mode"][]` — evades this
+ * recursion at its own top level, since none of those shapes is itself a
+ * union. This is not a new category of gap this file failed to disclose;
+ * it is a concrete instance of the general "compound type" shape this
+ * file already names as unrecursed-into, now demonstrated rather than
+ * merely asserted. Deliberately NOT fixed by extending the recursion —
+ * see `.genesis/decisions/0004-gate.md`'s ROUND 4 subsection for the
+ * argument against chasing this specific shape further, and this file's
+ * own "DISCLOSED LIMIT" describe block below for the real, passing test
+ * pinning it.
+ *
  * FAILS CLOSED, STATED PRECISELY RATHER THAN MORE BROADLY THAN IT HOLDS:
  * this file refuses a file outright (`UnparseableFileError`) only on a
  * SYNTAX diagnostic (`getSyntacticDiagnostics`) — a file the parser itself
@@ -183,11 +201,15 @@ afterAll(() => {
 
 /**
  * Whether `type` IS, or is a union CONTAINING, the exact string-literal
- * type named by `FORBIDDEN_LITERAL` — see this file's own header for why
- * recursing into unions (and not intersections or object-type properties)
- * is enough: every declaration-level type this file resolves below is
- * already the UNWRAPPED type a value/return/alias actually has, not an
- * object type with the literal buried inside some further property.
+ * type named by `FORBIDDEN_LITERAL` — recursing into unions only. This is
+ * a bounded, best-effort unwrapping, not an exhaustive one: it does NOT
+ * recurse into intersections, object-type properties, or — CONFIRMED, not
+ * merely theoretical, see this file's own header — array/tuple element
+ * types (`Extract<Intervention, { kind: "halt" }>["mode"][]` evades this
+ * recursion at its own top level, since an array type is not a union).
+ * Left unextended deliberately; see this file's own header and
+ * `.genesis/decisions/0004-gate.md`'s ROUND 4 subsection for the argument
+ * against chasing this specific shape further.
  */
 function typeContainsForbiddenLiteral(type: Type, seen: Set<Type> = new Set()): boolean {
   if (seen.has(type)) return false;
@@ -631,6 +653,33 @@ describe("best-effort recall: none of the declaration kinds this file enumerates
       // and `x.mode` is an EXPRESSION passed as an argument, not itself a
       // declaration this scan resolves. Confirmed here, not assumed.
       expect(leaks).toEqual([]);
+    });
+  });
+
+  /**
+   * DISCLOSED LIMIT — NOT A CHECK TO PASS, A GAP PINNED SO IT IS NEVER
+   * SILENTLY REDISCOVERED. Found by L4 VERIFY while testing round 4's own
+   * demoted claim, and confirmed by the coordinator as a finding this
+   * best-effort recall claim predicts and survives, not a defect — see
+   * this file's own header and `.genesis/decisions/0004-gate.md`'s ROUND
+   * 4 subsection for the argument against extending
+   * `typeContainsForbiddenLiteral`'s recursion to chase it.
+   */
+  describe("DISCLOSED LIMIT (not a check): an array/tuple type is not a union, so typeContainsForbiddenLiteral's union-only recursion does not unwrap it", () => {
+    it("an array of the forbidden literal's own union type is confirmed NOT caught, even though the underlying TypeAliasDeclaration is resolved", () => {
+      const source = [
+        'import type { Intervention } from "../../contracts/intervention.js";',
+        'export type ModeArray = Extract<Intervention, { kind: "halt" }>["mode"][];',
+      ].join("\n");
+      const { leaks } = analyzeScratch(source);
+      // Confirmed NOT caught: the resolved type of `ModeArray` is an ARRAY
+      // type whose element type is the forbidden union — this file's own
+      // recursion only ever looks at unions, never unwraps an array to
+      // reach its element type. The source text above still never spells
+      // the forbidden literal, confirming this is the same shape of gap
+      // as every other disclosed limit in this file, not merely untested.
+      expect(leaks).toEqual([]);
+      expect(source.toLowerCase().includes(FORBIDDEN_LITERAL)).toBe(false);
     });
   });
 });
