@@ -97,6 +97,31 @@ import type { ArbitrationRule, InterventionRuling } from "./intervention-ruling.
  * `__tests__/never-exceed-gate.test.ts` for the property-based proof over
  * generated inputs, and this file's own `ruleOneConflict` for where both
  * paths are visibly separate branches, never merged into one.
+ *
+ * A SECOND PRECONDITION, ADDED AFTER L4 VERIFY REPORTED A LIVE BYPASS OF
+ * THE ABOVE PROPERTY, NOT MERELY DEFENDED IN THE ABSTRACT: `matchesConflict`
+ * (`human-authorization.ts`) is pure string equality on `conflictId` — it
+ * cannot tell "the same logical conflict, asked about twice" from "two
+ * GENUINELY DIFFERENT conflicts a caller happened to hand this function
+ * under the identical id string." A `humanAuthorization` scoped to one
+ * conflict then silently also matched every OTHER conflict in the same
+ * batch sharing that id — a real violation of "an authorization for a
+ * different conflict is refused, not silently reused" (plan §4 M5), even
+ * though each individual match check was itself correct in isolation. See
+ * `.genesis/decisions/0005-arbitration.md` Decision 8 for the argument
+ * that this is INPUT VALIDATION, not a correlation gap to patch inside
+ * `matchesConflict` itself: `lib/conflict/detected-conflict.ts`'s own
+ * `deriveConflictId` mints `ConflictId` deterministically from `kind +
+ * resourceId + sorted agentIds`, so two conflicts M3 itself ever produces
+ * CANNOT collide — but `arbitrate` accepts `DetectedConflict[]` from any
+ * caller and, until this precondition, trusted `conflict.id` verbatim with
+ * no check at all. `conflicts.map((c) => String(c.id))` must have no
+ * duplicate — enforced by throwing, the identical fail-closed-on-a-
+ * checkable-precondition shape as the length check immediately below, not
+ * by teaching `matchesConflict` to also compare `resourceId`/`agentIds`
+ * (correlation machinery with its own edges this project has already paid
+ * for choosing over a canonical-form requirement more than once — see
+ * that ADR decision for the argument in full).
  */
 export function arbitrate(
   conflicts: readonly DetectedConflict[],
@@ -110,6 +135,18 @@ export function arbitrate(
       `arbitrate: conflicts (${conflicts.length}), available (${available.length}), and severities ` +
         `(${severities.length}) must be the same length — they are index-paired, one entry per conflict.`,
     );
+  }
+
+  const seenConflictIds = new Set<string>();
+  for (const conflict of conflicts) {
+    const key = String(conflict.id);
+    if (seenConflictIds.has(key)) {
+      throw new Error(
+        `arbitrate: conflicts contains a duplicate conflict id (${key}) — every conflict in one batch must have ` +
+          `a unique id, or a humanAuthorization scoped to one of them would silently also match the others.`,
+      );
+    }
+    seenConflictIds.add(key);
   }
 
   return conflicts.map((conflict, index) =>
