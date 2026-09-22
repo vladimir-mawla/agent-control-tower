@@ -1,6 +1,7 @@
 # ADR 0001 — M1 contracts: alternatives considered, and the two gaps the plan leaves for M3/M4/M5 to close
 
-- **Date:** 2026-09-22
+- **Date:** 2026-09-22 (Decision 2 revised same day, after L4 VERIFY rejected this milestone's first PR
+  having found and run two working bypasses — see Decision 2 for the full incident report)
 - **Status:** accepted
 - **Phase / milestone:** M1 (BUILD) — `lib/contracts/`
 
@@ -40,51 +41,136 @@ actually writing the types, that the mapping really doesn't work mechanically ei
 no field-for-field correspondence to reuse, only the surface-level "discriminated union with per-variant
 required fields" pattern, which this project re-derives independently rather than importing.
 
-## Decision 2 — the "no engine may construct `halt`/`forced` on its own initiative" refusal is enforced two ways, not one, because a required field alone is not enough
+## Decision 2 — the "no engine may construct `halt`/`forced` on its own initiative" refusal: two independently-verified bypasses, what was fixed, and the claim finally stated at its true strength
 
-The plan states this refusal but does not specify a mechanism beyond "no engine milestone (M3, M4, or
-M5) may construct this variant." A required `authorizedBy: HumanId` field stops an *accidental*
-construction (an object literal missing the field fails to compile) but, on its own, does nothing to
-stop a *deliberate* one: any file importing a hypothetical `humanId(raw: string): HumanId` — the exact
-shape `agentId()`/`resourceId()`/`resourceClaimId()`/`checkpointId()`/`conflictId()` all use in `ids.ts`
-— could call `humanId("approved")` from inside `lib/gate` or `lib/arbitrate` and produce a fully
-type-valid `halt`/`forced` value with zero real human involvement. That is the exact "trust the
-self-report" failure this whole project exists to refuse, just relocated one level down into the id
-brand instead of the intervention itself.
+**This decision was revised after L4 VERIFY (independent review) rejected the PR this milestone first
+opened, having found and run two working bypasses.** The original version of this decision described a
+single mechanism (no minting function + a text-grep test) and claimed more than that mechanism actually
+held. Both the mechanism and the claim are corrected below; nothing about this revision is hidden —
+`__tests__/human-id.test.ts` and `__tests__/intervention.test.ts` both now contain tests that reproduce
+the exact reported bypasses and pin what happens, one way or the other, for each.
 
-**Alternative considered and rejected: give `HumanId` a minting function identical in shape to the other
-five id brands', and rely on the required-field check alone.** This is what every other id brand in this
-milestone does (`ids.ts`), and it would have been the path of least resistance — the plan does not
-explicitly forbid it. Rejected because the five other id brands are pure identity tokens (nothing
-downstream treats "I have one of these" as evidence of anything beyond naming a thing); `HumanId` is not
-identity, it is a trust claim, and a project whose central selling point is "an automated engine may
-never manufacture this" should not make manufacturing it one function call away from `lib/contracts`
-itself.
+**Bypass 1 — casting the whole object through `unknown`, never naming `HumanId` at all:**
 
-**Chosen:** `human-id.ts` exports the `HumanId` brand with **no minting function anywhere in `lib/`**.
-`__tests__/human-id.test.ts` greps every non-test file under `lib/` for a cast into this brand (the same
-allowlist/denylist-scan technique decision-engine's `brand-casts.test.ts` and shadow-run's
-`architecture.test.ts` both use for an equivalent problem) and fails the build if one appears — with no
-excluded "defining file" the way `Confidence`/`CostOfBeingWrong` exclude `confidence.ts`/`cost.ts`,
-because no file in this codebase is meant to have that exemption. Test fixtures are the sole allowed
-exception (a test asserting a literal string into the brand to build a sample `Intervention`), matching
-the identical test-file exemption `brand-casts.test.ts` documents.
+```ts
+export const attack1: HaltForced = {
+  kind: "halt", mode: "forced",
+  authorizedBy: "not-a-real-human", conflictId: "fake-conflict",
+} as unknown as HaltForced;
+```
 
-This still is not an unforgeable guarantee, and the account's own standing note ("don't restate a
-disclosed limit more strongly") applies directly: it is a static, greppable check, not a cryptographic
-one. It cannot stop a determined author from renaming the brand, editing `human-id.ts` itself, or
-smuggling a value across an untyped `any` boundary the scan can't see. It closes exactly one door — the
-convenience-constructor door every other id brand in this file deliberately leaves open — and is stated
-here as closing that door and no more.
+`typecheck` clean, `assertValidHaltForced(attack1)` returned `{ ok: true }` (it only checked that both
+fields were present, non-empty strings — which fabricated ones still are). **This is not a bug in
+`assertValidHaltForced`, and no fix was applied to it that adds a check here** — see the "what was
+NOT changed, and why" paragraph below. The fix was to the CLAIM: `intervention.ts`'s own header and
+`assertValidHaltForced`'s doc comment were rewritten to state, at their true strength, that the type
+system and this file's checks make an unauthorized `halt`/`forced` impossible to construct
+*accidentally* or *conveniently* — never that they make it impossible to construct at all by a
+deliberate, visible cast written in cleartext inside `lib/`. `__tests__/intervention.test.ts` now
+contains a test ("DISCLOSED LIMIT: a fully-formed cast...") that reproduces `attack1` verbatim and
+asserts `assertValidHaltForced` returns `{ ok: true }` for it — a passing, documented test pinning the
+gap, not a silently rediscoverable one.
 
-**Real falsifiability incident found while building this test, worth recording:** the first version of
-`human-id.ts`'s own header comment used the literal phrase `` `as HumanId` `` three times while
-*documenting* the scan. Because the scan walks every non-test `.ts` file's source text line by line
-(comments included, by design — a cast hidden in a string-concatenation trick would still need to spell
-the type name eventually), the grep matched its own governing file's prose and failed `npm test` on the
-very first run. This was the correct behavior, not a bug — the fix was rewording the three comment lines
-to describe the cast without spelling it literally, not weakening the pattern. It is direct, in-repo
-evidence the check reads real source text rather than being a check that could not fail.
+**Bypass 2 — aliasing the import so the cast site never spells `HumanId`:**
+
+```ts
+import type { HumanId as HID } from "./human-id.js";
+export function mintFakeHuman(raw: string): HID { return raw as HID; }
+```
+
+This reconstructs, in one line, exactly the convenience constructor this decision already rejected
+below (see "Alternative considered and rejected") — undetected, because `__tests__/human-id.test.ts`'s
+first version scanned for the literal TEXT `` `as HumanId` ``, and the cast site here never spells those
+four characters. **This bypass WAS closed, with a mechanism change, not a claim narrowing**: the guard
+was rebuilt on the real TypeScript type checker (`typescript@7.0.2`'s `typescript/unstable/sync`
+`API`/`Project`/`Checker`, the same package this repo already depends on for `npm run typecheck`, since
+its main entry is the native Go compiler and exports none of the classic `ts.createSourceFile`/
+`ts.createProgram` surface at all) rather than on text. For every `as`/`<T>` cast in every non-test file
+under `lib/`, the new scan resolves the cast's target type-name node to its LOCAL symbol
+(`checker.getSymbolAtLocation`), follows that symbol's own alias chain
+(`checker.getAliasedSymbol`, looped, capped at 20 hops) to whatever it ultimately refers to, and compares
+that ORIGINAL symbol's identity — never the name written at the call site — against `HumanId`'s own real
+declaration in `human-id.ts`. This closes the reported bypass regardless of the local alias name, and
+was additionally hardened, before any verifier tried it, against a parenthesized cast target
+(`as (HumanId)`, not itself a `TypeReferenceNode`) and a multi-hop re-export chain (`export type {
+HumanId as X } from ...` re-imported and aliased again) — both confirmed caught by dedicated tests, not
+assumed to generalize from the one reported case.
+
+**This account's own precedent for exactly this class of fix, read and followed, not reinvented:**
+`shadow-run`'s `lib/simulate/__tests__/architecture.test.ts` hit the identical wall — a hand-rolled/
+text-based scanner has open-ended gaps — for a different property (LLM/network imports, not a
+branded-type cast) and, after five rounds of patching a tokenizer, replaced it outright with the real
+compiler. This project's fix reuses that same scaffolding (one `API` instance per test file, `Node#
+forEachChild` AST walking, failing closed via `getSyntacticDiagnostics` before trusting any walk — a
+syntax error can make the parser's own error recovery silently misplace the very node being searched
+for) and adds, on top of it, the one piece shadow-run's own test never needed: resolving a SYMBOL through
+the checker, because catching an aliased cast is a semantic fact no syntax tree alone carries.
+
+**A real, second-order problem found and fixed while building this, worth recording:** the checker-based
+scan's first working version called `snapshot.getDefaultProjectForFile(file)` and, for any `lib/`
+file that doesn't itself import `human-id.ts`, got back either the wrong project (this repo has two
+tsconfigs at its root — `tsconfig.json`, which `exclude`s `lib/**/*`, and `tsconfig.lib.json`, which
+actually covers it) or a single-file INFERRED project that could never resolve `human-id.ts`'s
+declaration at all — `Snapshot.getProjects()` never even listed `tsconfig.lib.json` as a known project,
+confirmed directly, not assumed. Fixed by opening `tsconfig.lib.json` explicitly (`openProjects`) and
+fetching it by name (`Snapshot.getProject`) instead of asking the API to guess. A second, separate
+instance of the same class of problem then appeared for the SCRATCH files the exploit-regression tests
+write to disk at runtime: once a project has been opened once through a given `API` instance, re-opening
+it (even after `closeProjects` and `clearSourceFileCache()`) does not re-run the config's include glob,
+so a file that didn't exist yet the first time stayed invisible for the rest of that instance's life —
+confirmed directly by writing a probe file and checking `project.rootFiles.length` before and after.
+Fixed by giving every scratch-file analysis its OWN fresh, one-off `API` instance (the file already
+exists on disk before that instance is even constructed, so its first-ever project open — proven to work
+correctly — is the only open it ever needs).
+
+**Alternative considered and rejected (unchanged from the original decision, now confirmed correct by
+the incident above rather than merely argued): give `HumanId` a minting function identical in shape to
+the other five id brands', and rely on the required-field check alone.** Bypass 2 is a direct
+demonstration of why this remains rejected: it is exactly what a `humanId(raw: string): HumanId`
+convenience constructor would let a caller do trivially, in one line, without even needing a cast at
+all.
+
+**Chosen, final shape:** `human-id.ts` exports the `HumanId` brand with **no minting function anywhere in
+`lib/`**, enforced by a checker-based, symbol-identity scan (not a grep) with no excluded "defining file"
+the way `Confidence`/`CostOfBeingWrong` exclude `confidence.ts`/`cost.ts` — no file in this codebase is
+meant to have that exemption. `assertValidHaltForced` additionally rejects a cast that drops or blanks
+either field entirely.
+
+**What was NOT changed, and why — the claim stated at its true strength, not narrowed by omission:**
+`assertValidHaltForced` was deliberately NOT strengthened to try to catch Bypass 1 (e.g. by requiring a
+hash of `authorizedBy`+`conflictId` computed by some `computeAuthorizationTag` function). Considered and
+rejected: any check computable from data this function already holds is a check an attacker who already
+has `as unknown as X` access to `lib/contracts` source could compute identically for their own fabricated
+fields — such a check would be theater, adding a line of code without adding any actual defense, which is
+worse than the honestly-stated gap it would paper over. Verifying either fact for real (that
+`authorizedBy` names a consenting human, that `conflictId` genuinely matches) requires either a secret
+this pure, I/O-free `lib/contracts` module should not hold, or an external record to check against —
+`HumanAuthorization`-style matching, which is `arbitrate`'s (M5, unbuilt) job if it is ever built against
+real infrastructure this milestone does not have, not a fix to backfill into M1's frozen types now. This
+is the same "no TypeScript design can stop a deliberate cast" property the type system as a whole already
+accepts as an honest, disclosed limit (decision-engine's own honest-limits section: a brand "stops an
+accidental assignment, not a deliberate cast") — restated here, once, at exactly its true strength, per
+this account's own standing note against restating a disclosed limit more strongly than it holds. The
+claim this milestone actually makes, everywhere it is stated (`intervention.ts`'s header,
+`assertValidHaltForced`'s doc comment, this ADR): the type system makes an unauthorized `halt`/`forced`
+impossible to construct *accidentally* or *conveniently*; reaching one requires writing a deliberate,
+visible unsafe cast in `lib/` source — a reviewable act that looks exactly like what it is, not something
+a policy check catches later.
+
+**Real falsifiability incidents recorded for both fixes, not just described:** for Bypass 2's fix, the
+new checker-based scan's own `resolveToOriginalSymbol` alias-following step was temporarily reverted to
+compare the LOCAL symbol directly (no alias-following) — this broke not only the reported-bypass
+regression test but every cross-file cast test, including the plain, un-aliased case (`"alice" as
+HumanId` from a different file resolves to a locally-scoped import-alias symbol with a DIFFERENT id than
+`HumanId`'s own declaration, even when the local name matches) — 6 tests failed with clear, specific
+mismatches, none silently passing; restoring the alias-following step returned the suite to green. This
+also confirms alias-following is not an edge-case add-on but the mechanism the entire cross-file check
+depends on. Separately, the first version of `human-id.ts`'s own header comment used the literal phrase
+`` `as HumanId` `` three times while documenting the (then text-based) scan, and the scan matched its own
+governing file's prose and failed `npm test` on the very first run — correct behavior, not a bug, fixed
+by rewording the comments; the rebuilt checker-based scan closes this class of false positive
+structurally (comments are not part of the AST at all, confirmed by a dedicated test), rather than
+merely by careful wording a second time.
 
 ## Decision 3 — `Conflict` and `ResourceClaim.id`: two shapes the plan does not fully specify, deliberately left open rather than guessed
 
@@ -159,14 +245,19 @@ exhaustive `switch` consuming it anywhere in the milestone is dead code presente
 ## Consequences
 
 - Positive: `halt`/`forced`'s authorization requirement is enforced at three independent layers — the
-  required-field type check, the missing-minting-function structural gap, and `assertValidHaltForced`'s
-  runtime guard against a value that reached the shape via an unsafe cast — each catching a failure mode
-  the layer below it cannot.
-- Positive: two real falsifiability experiments were run against this milestone's own code (not just
-  described) and are recorded in the PR report: deleting the stand-in `"reassign"` case broke
-  `npm run typecheck` with `TS2345` at the exact line predicted, and weakening `assertValidHaltForced` to
-  skip its `conflictId` check broke exactly one test (`rejects a value missing conflictId even when
-  authorizedBy is present`) with a clear assertion mismatch, not a false pass.
+  required-field type check (stops accidental construction), the missing-minting-function structural gap
+  now backed by a real symbol-resolving checker scan (stops convenient construction, including through an
+  aliased or re-exported import), and `assertValidHaltForced`'s runtime guard (stops a cast that drops or
+  blanks a field entirely) — each catching a failure mode the layer below it cannot, and none of the three
+  claimed, after L4 VERIFY's review, to stop a fully-formed cast written deliberately through `unknown` at
+  the outer type. That remaining gap is disclosed by name in Decision 2, not papered over.
+- Positive: real falsifiability experiments were run against this milestone's own code throughout (not
+  just described) and are recorded in the PR report: deleting the stand-in `"reassign"` case broke
+  `npm run typecheck` with `TS2345` at the exact line predicted; weakening `assertValidHaltForced` to skip
+  its `conflictId` check broke exactly one test with a clear assertion mismatch; and, after L4 VERIFY's
+  review, reverting the new checker scan's alias-following broke six tests including plain, un-aliased
+  cross-file casts — confirming alias-following is load-bearing for the whole mechanism, not an edge-case
+  add-on. None was a false pass.
 - Negative / cost: `Conflict` and `ResourceClaim` do not yet carry an `id` field despite `Intervention`
   and `.genesis/DONE.html` presuming one exists somewhere reachable — M3 inherits an explicit, named gap
   instead of a guessed answer that might have been wrong. This is treated as the correct trade at this
@@ -183,7 +274,15 @@ exhaustive `switch` consuming it anywhere in the milestone is dead code presente
   correspondence exists once actually written out; the plan's own report already rejects it at the design
   level.
 - A `humanId()` minting function matching the other five id brands' shape (Decision 2) — would make
-  fabricating a human authorization one function call away from `lib/contracts` itself.
+  fabricating a human authorization one function call away from `lib/contracts` itself; independent
+  verification's Bypass 2 directly demonstrates this is exactly what an aliased import lets a caller do.
+- A text/regex-based cast scanner, patched to also catch aliased imports (Decision 2) — the account's own
+  precedent (`shadow-run`'s architecture test, five rounds of tokenizer patches) argues directly against
+  growing this kind of machinery; replaced with a real, checker-based symbol resolution instead.
+- Strengthening `assertValidHaltForced` with a self-computed binding check (e.g. a hash of
+  `authorizedBy`+`conflictId`) to try to catch Bypass 1 (Decision 2) — any check computable from data the
+  function already holds is a check an attacker with `as unknown as X` access could compute identically;
+  would be theater, not defense.
 - Guessing `Conflict`'s and `ResourceClaim`'s missing `id` fields now, before `lib/conflict/**` exists to
   verify the guess (Decision 3) — risks freezing a wrong shape into a file that cannot be unfrozen
   cheaply.
