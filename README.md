@@ -10,6 +10,16 @@ actually support — because "just halt it" is the move most likely to be destru
 is wrong about what that agent was mid-way through doing. See `.genesis/PLAN.md` for the full claim,
 the closed `Intervention` vocabulary, and the nine-milestone plan.
 
+## Live
+
+**https://agent-control-tower-nine.vercel.app** — deployed at M2 (deliberately early, not left to
+the end). `GET /api/health` runs a real check against M1's frozen `lib/contracts` (not a bare
+liveness ping) and reports the deployed commit SHA:
+
+```bash
+curl -sf https://agent-control-tower-nine.vercel.app/api/health
+```
+
 ## Stack
 
 - Next.js 16 (App Router) + React 19, TypeScript, deployed to Vercel
@@ -38,8 +48,8 @@ does not have this problem.
 
 ## Status
 
-This is a genesis-only repository. It has the tooling skeleton, the `.genesis/` planning artifacts,
-and a placeholder home page — no engine code and no domain logic yet. `lib/contracts/**` (M1) is a
-separate milestone with its own PR and its own independent verifier, and each of the other eight
-milestones in `.genesis/PLAN.md` follows the same pattern. There is **no live URL yet**; M2 deploys a
-minimal skeleton to Vercel next, deliberately early rather than left to the end.
+This repository has the tooling skeleton, the `.genesis/` planning artifacts, `lib/contracts/**`
+(M1, frozen after five verification rounds), and a deployed health-checked skeleton (M2, this
+milestone) — still no engine code and no domain logic. `detectConflicts` (M3), the gate (M4), and
+arbitration (M5) are each a separate, not-yet-started milestone with its own PR and its own
+independent verifier, and the remaining milestones in `.genesis/PLAN.md` follow the same pattern.
