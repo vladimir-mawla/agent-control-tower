@@ -102,6 +102,15 @@ check with a random id layered on top. Determinism turns "same participants, sam
 resource" into "same id," which is what lets `__tests__/order-independence.test.ts` and
 `__tests__/idempotence.test.ts` compare whole result arrays with a plain `toEqual`.
 
+**Sharpened, post-merge-review: `deriveConflictId`'s own internal sort/dedup of `agentIds`
+(`Array.from(new Set(agentIds)).sort()`) is defense-in-depth, not the load-bearing mechanism
+for `detectConflicts`'s end-to-end order-independence — the `Set`-keyed grouping in
+`detect-conflicts.ts`'s `groupClaimsByResource` (Decision 5, below) already pre-sorts and
+pre-dedupes every real argument this function ever receives, confirmed by disabling the
+internal sort/dedup entirely and observing this function's own unit tests fail while every
+end-to-end `detectConflicts` test (173 of them) stayed green. See the "Falsifiability" section
+for the experiment.**
+
 **Honest limit, stated once, not silently accepted: the `|`-joined id string can collide for
 an adversarially-crafted id containing `|`.** `lib/contracts/ids.ts` states plainly that
 `AgentId`/`ResourceId` carry "no invariant beyond being a string" — no alphabet restriction —
@@ -261,26 +270,74 @@ this milestone's files, both still green with no edit to either test.
 
 ## Falsifiability — the experiment actually run, not merely described
 
-`groupClaimsByResource` (`detect-conflicts.ts`) was temporarily rewritten to use plain arrays
-instead of `Set`s for `writeAgents`/`readAgents`, and the `write-write` threshold check changed
-from "at least 2 DISTINCT agents" (`.size >= 2`) to "at least 2 claim entries" (`.length >= 2`)
-— reintroducing exactly the failure mode the plan's own idempotence refusal names: an agent
-re-declaring claims (even non-identical ones) now counted toward its own conflict threshold.
-`npm run typecheck` stayed clean (this is a runtime behavior bug, not a type error) and
-`npx vitest run lib/conflict` immediately failed two tests with precise, non-vacuous diffs:
+**Correction (post-merge-review): this section originally, and the commit message on
+`85bb553` ("M3: implement detectConflicts"), both claimed the experiment below broke exactly
+two tests. That count was wrong — it broke three. L4 VERIFY independently reproduced the
+identical experiment and reported the third; re-run here a second time, by this milestone's
+own author, before correcting the number, rather than taking the report on trust. The
+discrepancy traced to the first run of this experiment having quietly added an extra
+`Array.from(new Set(...))` at the participant-construction call site while converting
+`writeAgents`/`readAgents` from `Set` to array — a compensating fix the minimal "just replace
+`Set` with array" sabotage should not have included, since it partially masked the exact defect
+the experiment exists to surface. The second, faithful run below (no compensating dedup added
+anywhere) is the one this ADR now stands behind. The commit message on `85bb553` is left
+unedited, per this account's own standing rule against rewriting history; this paragraph is the
+correction of record.**
 
-- `detect-conflicts.test.ts`: *"the SAME agent holding two different (non-identical) write
-  claims on one resource is not write-write against itself"* — expected `{ conflicts: [] }`,
-  received a fabricated `write-write` conflict naming only `agent-a` against itself.
+`groupClaimsByResource` (`detect-conflicts.ts`) was temporarily rewritten to use plain arrays
+instead of `Set`s for `writeAgents`/`readAgents`, with only the minimal fixups required for the
+file to still compile (`.size` → `.length`, `.has()` → `.includes()`) and no dedup added
+anywhere else — reintroducing exactly the failure mode the plan's own idempotence refusal
+names: an agent re-declaring claims (even non-identical ones) now counted toward its own
+conflict threshold, AND surfaced with duplicates still present in the reported `agentIds`.
+`npm run typecheck` stayed clean (this is a runtime behavior bug, not a type error) and
+`npx vitest run lib/conflict` immediately failed **three** tests with precise, non-vacuous diffs:
+
+- `detect-conflicts.test.ts` → "write-write" describe block: *"the SAME agent holding two
+  different (non-identical) write claims on one resource is not write-write against itself"* —
+  expected `{ conflicts: [] }`, received a fabricated `write-write` conflict naming `agent-a`
+  twice against itself.
+- `detect-conflicts.test.ts` → "idempotence under duplicate claim re-declaration" describe
+  block: *"an agent re-declaring the identical claim many times does not multiply the conflict
+  it participates in"* — expected `agentIds` `["agent-a", "agent-b"]`, received the same pair
+  with `"agent-a"` repeated 25 times (the un-deduplicated `writeAgents` array leaking straight
+  into the reported conflict).
 - `idempotence.test.ts`: *"a scenario built from 50x-duplicated claims/heartbeats matches the
   equivalent de-duplicated scenario exactly"* — the 50x-duplicated run produced an extra,
-  spurious `write-write` conflict the de-duplicated baseline did not.
+  spurious `write-write` conflict (`agent-a` repeated 50 times) the de-duplicated baseline did
+  not.
 
 The sabotaged file was restored from a pre-edit backup; `npm run typecheck` and `npm test`
 were re-run and confirmed clean (18 files / 273 tests) before any commit was made. This is the
 milestone's own required falsifiability check, run for real against its own most
 consequential design claim (idempotence is structural, not incidental), not asserted from
 reading the code alone.
+
+**A second, narrower experiment, run to answer a sharper question L4 VERIFY raised: is
+`deriveConflictId`'s OWN internal sort/dedup (`detected-conflict.ts`) load-bearing for
+`detectConflicts`'s end-to-end order-independence, or is it defense-in-depth on top of a
+mechanism that already holds without it?** `deriveConflictId` was temporarily edited to skip
+its `Array.from(new Set(agentIds)).sort()` step entirely (joining `agentIds` in whatever order
+they arrived, duplicates and all). Result, confirmed directly: `deriveConflictId`'s own unit
+tests (`detected-conflict.test.ts`) failed exactly as expected — "is identical regardless of
+the order agentIds are supplied in" and "is identical regardless of duplicate agentIds in the
+input" both failed, producing two different id strings for what should be the same conflict.
+But `order-independence.test.ts`, `idempotence.test.ts`, and `detect-conflicts.test.ts` — 173
+tests across all three files — stayed **fully green**, unaffected. The reason is structural,
+not coincidental: every real call site in `detect-conflicts.ts`'s `computeConflicts` builds
+`participants` via `Array.from(<a Set>).sort().map(agentId)` BEFORE ever calling
+`deriveConflictId` — the argument `deriveConflictId` receives from its one real caller is
+already sorted and deduplicated, so removing its own internal sort/dedup has nothing left to
+do at that call site. **This sharpens, rather than contradicts, this ADR's own Decision 5 and
+Decision 2: the `Set`-keyed grouping in `groupClaimsByResource` is the actual load-bearing
+mechanism order-independence and idempotence rest on; `deriveConflictId`'s internal
+sort/dedup is a second, independent layer of defense — valuable for any future caller that
+does NOT pre-sort/dedupe (e.g. a hypothetical direct call from M4/M5 code, or from this
+file's own unit tests, which deliberately supply out-of-order/duplicated `agentIds` to prove
+the function is robust in isolation) but not the reason `detectConflicts` itself is
+order-independent today.** The sabotaged file was restored from a pre-edit backup;
+`npm run typecheck` and `npm test` were re-run and confirmed clean (18 files / 273 tests)
+before this correction was committed.
 
 ## Consequences
 
