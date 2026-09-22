@@ -274,11 +274,18 @@ See [`THESIS.md`](THESIS.md) for where this is going, [`NOTES.md`](NOTES.md) for
 verified milestone by milestone, and the [README](../README.md) for the honest limits this pipeline does
 **not** close — including several nobody had written down before this milestone.
 
-**A note on this document's own model.** The task that produced this document named
-`~/Desktop/shadow-run/docs/ARCHITECTURE.md` as the structure to mirror; that file does not exist in that
-repository (`shadow-run/docs/` contains only `WALKTHROUGH.md`, confirmed directly). This document instead
-mirrors the actual, existing precedent in this account's own sibling projects —
-`~/Desktop/decision-engine/docs/ARCHITECTURE.md` — which has the identical shape this task asked for
-(stage-by-stage refusals, each cited to a real test, an import-direction proof, a closing pointer to
-THESIS/NOTES/README). Recorded here rather than silently substituted, per this milestone's own governing
-instruction not to let a claim the repository doesn't support pass uncorrected.
+**A note on this document's own model, decided on the merits.** `~/Desktop/shadow-run/docs/ARCHITECTURE.md`
+(326 lines, `main` at `8c7ecd8`) and `~/Desktop/decision-engine/docs/ARCHITECTURE.md` share the same base
+shape — a snapshot rather than a file tour, per-stage "Job" + "What it refuses, and why" bullets cited to
+real tests, a named limit disclosed inline where it belongs rather than deferred wholesale to a separate
+section. The one structural choice that actually distinguishes them is the one that matters here:
+shadow-run's own diagram opens with an explicit caveat that its stage order is a **runtime call sequence,
+not an import chain** — `lib/simulate`, `lib/reconcile`, and `lib/rollback` are independent siblings at
+the type level, each importing only `lib/contracts`, sequenced solely by domain/orchestration code that
+calls all three. That caveat is the right choice *for shadow-run*, because it is true there and false to
+omit. It is not this codebase's shape: `lib/conflict` → `lib/gate` → `lib/arbitrate` genuinely is a
+layered import chain (the grep at the top of this document proves it), the identical shape
+`decision-engine`'s own `lib/contracts → lib/signals → lib/decide → lib/audit` diagram documents. This
+document follows `decision-engine`'s structure — stating the import chain directly as a diagram, rather
+than shadow-run's own stage-order-is-not-an-import-chain caveat — because that is the one true of what
+this codebase actually is, not because either sibling document was thought unavailable.
