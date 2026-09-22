@@ -1,9 +1,11 @@
 # ADR 0001 — M1 contracts: alternatives considered, and the two gaps the plan leaves for M3/M4/M5 to close
 
-- **Date:** 2026-09-22 (Decision 2 revised twice more the same day, across two further L4 VERIFY
+- **Date:** 2026-09-22 (Decision 2 revised three more times the same day, across three further L4 VERIFY
   rejections — round 1 found two working bypasses of the original mechanism; round 2's fix closed one and
-  correctly narrowed the claim on the other, then round 3 found two further routes and ruled out
-  extending the scanner further, relocating the actual guarantee instead — see Decision 2 in full)
+  correctly narrowed the claim on the other; round 3 found two further routes and ruled out extending the
+  scanner further, relocating the actual guarantee instead; round 4 found a file-coverage gap on a
+  different axis, closed by a `.ts`-only inventory check rather than by parsing more file types — see
+  Decision 2 in full)
 - **Status:** accepted
 - **Phase / milestone:** M1 (BUILD) — `lib/contracts/`
 
@@ -278,6 +280,81 @@ function exists in `lib/contracts` (true, checked), and no ordinary, visibly-nam
 appears anywhere in this milestone's own non-test source (true, checked, and unsurprising — this
 milestone has no engine code to write one in either).
 
+**ROUND 4 — a file-coverage gap, a different axis from anything round 3 disclosed, closed by an
+inventory check rather than by parsing more file types:**
+
+L4 VERIFY confirmed every round-3 claim on independent review — every plan citation checked verbatim
+against `.genesis/PLAN.md` §4 M4/M5, no absolute surviving at any of six checked sites, the
+build-requirement framing judged legitimate rather than a forward promise, the residual (a caller
+forging authorization) judged honest, and the routes A/B pinning tests confirmed load-bearing by
+patching the scanner and watching 10 tests fail. It then reported one more finding:
+
+```ts
+// lib/contracts/fake-human.d.ts
+import type { HumanId } from "./human-id.js";
+export declare const fakeHuman: HumanId;
+
+// lib/contracts/fake-human.js
+export const fakeHuman = "shipped-via-dts-js-pair-not-a-real-human";
+
+// lib/contracts/attackC.ts — no cast, no any, no generic
+import { fakeHuman } from "./fake-human.js";
+export const attackC: HumanId = fakeHuman;
+```
+
+`attackC.ts` typechecks clean (confirmed directly — reproduced verbatim in this repo, `npm run
+typecheck` stayed green with the three files present) and `fakeHuman` is a real runtime string that
+satisfies `assertValidHaltForced`. Every `.ts` file involved is entirely ordinary; the lie lives in an
+ambient declaration with no expression to inspect at all, backed by a `.js` file the checker-based scan
+never opens (`__tests__/human-id.test.ts` only ever calls `analyzeFile`/`analyzeScratch` on `.ts` paths).
+
+**This is a genuinely different finding from routes A/B, not a third example of the same disclosed
+class, and worth being precise about why:** routes A/B are the type CHECKER accepting something unsafe
+inside CHECKED `.ts` source (an open-ended, unenumerable property of the language, correctly left
+disclosed rather than chased). This round-4 finding is the SCANNER's own FILE COVERAGE — a fact about
+which files `__tests__/human-id.test.ts` ever reads, which was never stated anywhere, and which (unlike
+routes A/B) is not open-ended: it is a closed, checkable fact about this repository's own file
+extensions.
+
+**Fix chosen: close the axis, don't defend it.** The coordinator's ruling, adopted without reservation:
+do not teach the scan to also parse `.d.ts`/`.js` files. That would reopen the identical open-ended
+chase one file-type at a time (a `.mjs` next, then a `.cjs`, then a build artifact nobody thought to
+check) — the same shape decision-engine's own `framework-free.test.ts` and this project's own rounds 1–3
+already paid for once each. Instead, `__tests__/file-inventory.test.ts` makes the scanner's actual input
+domain (".ts files") and `lib/`'s actual permitted contents THE SAME SET, by construction: it walks
+every file under `lib/` (source and test directories both — no `__tests__` exemption here, unlike
+`listNonTestSourceFiles`/`listAllFiles`'s own real-offender scans, because a `.d.ts`/`.js` pair hiding
+inside `__tests__/` would be exactly as dangerous) and fails the build if any file's basename does not
+end in `.ts`, or does end in `.d.ts` specifically (checked separately from a bare `.ts` suffix — Node's
+`path.extname("fake-human.d.ts")` returns `".ts"`, not `".d.ts"`, so an `extname`-based check would have
+been blind to the exact reported shape; `endsWith` against the whole basename has no such blind spot,
+confirmed by a dedicated unit test enumerating `.ts`/`.test.ts`/`.d.ts`/`.js`/`.mjs`/`.cjs`/`.jsx`). This
+project is all-TypeScript, so this check costs nothing today and needs no maintenance as new file-type
+attacks are invented — the whole class becomes unreachable rather than a growing list of denials.
+
+`human-id.ts` and `intervention.ts`'s own headers now each state the scan's input domain as a property,
+in one sentence, naming `file-inventory.test.ts` as the check that keeps that statement honest — not
+enumerating `.d.ts` as a named route the way routes A/B are named, per the coordinator's own distinction:
+name the domain and the check, not another example.
+
+**Falsifiability, proved twice — as a permanent regression test AND as a live, external repro:** the
+verifier's exact `fake-human.d.ts`/`fake-human.js` pair (plus `attackC.ts`, to confirm the full chain)
+was landed for real in this repository's own `lib/contracts/`, `npm run typecheck` was confirmed to stay
+clean (matching the report), and `npm test` was confirmed to FAIL, naming both offending files by their
+real relative paths in the failure output — then all three files were removed and `npm test` was
+confirmed green again (77/77). `__tests__/file-inventory.test.ts` also carries this exact pair as a
+committed, permanent regression test (write, assert caught by name, remove in `finally`, assert clean
+again afterward) — so this specific historical attack has a passing, checked test naming it, the same
+discipline every other reported bypass in this ADR received.
+
+**Alternative considered and rejected: parse `.d.ts` and `.js` files with the existing checker-based
+scan, in addition to `.ts` files.** This was the "more scanner coverage" move the coordinator explicitly
+ruled out, and for good reason beyond just following the ruling: it treats file-coverage as one more
+instance of the unenumerable-routes problem (routes A/B) when it is actually a closed, small,
+enumerable fact about this repository (which file extensions exist under `lib/`) — solving a closed
+problem with an open-ended, ever-growing parser is strictly worse than an inventory check that makes the
+closed problem's answer "none, by policy" once and for all.
+
 ## Decision 3 — `Conflict` and `ResourceClaim.id`: two shapes the plan does not fully specify, deliberately left open rather than guessed
 
 Two places in the plan pull in different directions, and this milestone chose not to silently resolve
@@ -366,9 +443,16 @@ exhaustive `switch` consuming it anywhere in the milestone is dead code presente
   `npm run typecheck` with `TS2345` at the exact line predicted; weakening `assertValidHaltForced` to skip
   its `conflictId` check broke exactly one test with a clear assertion mismatch; reverting the checker
   scan's alias-following broke six tests including plain, un-aliased cross-file casts, confirming it is
-  load-bearing, not an edge-case add-on; and routes A/B (round 3) were confirmed, not assumed, to produce
+  load-bearing, not an edge-case add-on; routes A/B (round 3) were confirmed, not assumed, to produce
   zero TypeScript diagnostics via `Program.getSemanticDiagnostics` before being pinned as a disclosed
-  limit. None was a false pass.
+  limit; and the round-4 file-inventory check was proved against the verifier's own exact `fake-human.d.ts`
+  + `fake-human.js` pair landed for real in this repository (`npm test` confirmed to fail, naming both
+  files, then confirmed green again after removal), not only against a committed regression test. None
+  was a false pass.
+- Positive: the scanner's own file coverage is now a closed, checkable property (every file under `lib/`
+  is `.ts`) rather than an unstated assumption — closing that axis by inventory rather than by teaching
+  the scan to also parse `.d.ts`/`.js`/etc. avoids reopening the identical open-ended chase on a new axis,
+  one file-type at a time.
 - Negative / cost: the round-3 relocation means this milestone's own tests cannot yet verify the property
   they name as the actual guarantee (`lib/gate/**`/`lib/arbitrate/**` don't exist) — it is recorded as a
   build requirement for M4/M5 rather than a checked fact, an explicit, named gap rather than a forward
@@ -404,6 +488,12 @@ exhaustive `switch` consuming it anywhere in the milestone is dead code presente
   continuing to claim more than it can prove — the same pattern that cost a sibling project six rounds and
   five bypasses on one function. Relocated the actual guarantee to a property of `lib/`'s own code instead
   (see Decision 2, round 3, for the argument in full).
+- Teaching the checker-based scan to also parse `.d.ts`/`.js` files, to catch an ambient declaration
+  backed by a runtime `.js` file (Decision 2, round 4) — explicitly ruled out: this treats a closed,
+  enumerable fact about the repository's own file extensions as if it were another instance of the
+  unenumerable-routes problem (routes A/B), reopening the identical open-ended chase one file-type at a
+  time. Closed instead with `__tests__/file-inventory.test.ts`, an inventory check making every file
+  under `lib/` `.ts`-only by policy.
 - Guessing `Conflict`'s and `ResourceClaim`'s missing `id` fields now, before `lib/conflict/**` exists to
   verify the guess (Decision 3) — risks freezing a wrong shape into a file that cannot be unfrozen
   cheaply.
