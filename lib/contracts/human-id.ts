@@ -107,9 +107,32 @@
  * `.js` — that would reopen the same open-ended chase on a new axis (a
  * `.mjs` next, then a `.cjs`) — but by `__tests__/file-inventory.test.ts`,
  * which makes `lib/**`'s actual, permitted contents exactly the set
- * `.ts`-only, so no non-`.ts` file can exist under `lib/` for a lie to
- * hide in. That check is what makes "the scan only reads `.ts` files"
- * a safe, closed domain statement rather than an unstated assumption.
+ * `.ts`-only.
+ *
+ * ROUND 4's OWN CLAIM HERE — "no non-`.ts` file can exist under `lib/`,
+ * so no file is left for a lie to hide in" — WAS ITSELF FALSE AS WRITTEN,
+ * independent verification reported, and correctly: the inventory check
+ * constrains what files may exist INSIDE `lib/`; it says nothing about
+ * what a `lib/` `.ts` file may IMPORT from OUTSIDE `lib/`. The identical
+ * `.d.ts`/`.js` pair, moved one directory up (`scripts/external-human.
+ * d.ts` + `.js`) and imported by a `lib/contracts/*.ts` file via a
+ * relative path that walks out and back in, reproduced the exact same
+ * bypass with zero cast, zero `any`, zero generic. The closure this file
+ * can honestly claim is the COMPOSITION of two checks, neither sufficient
+ * alone: `file-inventory.test.ts` (no non-`.ts` file inside `lib/`) AND
+ * `import-containment.test.ts` (no import anywhere in `lib/**` may
+ * resolve outside `lib/**`, checked by resolving each specifier to a
+ * real, `realpathSync`'d absolute path and confirming containment — never
+ * by pattern-matching the specifier's own text, which is exactly the trap
+ * that defeated an import allowlist on a sibling project). Composed, an
+ * ambient declaration paired with a runtime file has nowhere left to
+ * exist that both `lib/`'s own contents permit AND `lib/`'s own code can
+ * reach — inside `lib/`, it would violate the inventory check by existing
+ * at all; outside `lib/`, it would violate the containment check the
+ * moment anything in `lib/` imports it. See `intervention.ts`'s header
+ * for this same composition stated once more, and `.genesis/decisions/
+ * 0001-contracts.md` Decision 2 for the full round-5 incident this
+ * paragraph responds to.
  *
  * Where a genuine `HumanId` actually comes from at runtime — a signed-in
  * operator's own session identity, checked at whatever real human-facing

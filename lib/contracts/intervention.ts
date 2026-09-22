@@ -22,12 +22,22 @@ import type { NonEmptyArray } from "./non-empty-array.js";
  * visibly-named cast (no function anywhere in `lib/` mints a `HumanId`,
  * and `__tests__/human-id.test.ts` resolves every cast's target type
  * through the real checker's own symbol/alias resolution over every `.ts`
- * file under `lib/` — `__tests__/file-inventory.test.ts` is what makes
- * "every `.ts` file" and "every file" the same set, by forbidding any
- * `.d.ts`/`.js`/other-extension file under `lib/` at all — so aliasing or
- * re-exporting the import does not help). That is genuinely useful and
- * genuinely narrow — it is NOT, and is not claimed anywhere in this
- * codebase to be, a guarantee that a `HumanId` cannot be forged at all.
+ * file under `lib/`). This is the COMPOSITION of three checks, and the
+ * claim below holds only for the composed set — see `human-id.ts`'s
+ * header for why a claim stated for any ONE of the three, alone, was
+ * independently found false twice: `__tests__/file-inventory.test.ts`
+ * makes "every `.ts` file" and "every file INSIDE `lib/`" the same set
+ * (no `.d.ts`/`.js`/other-extension file may exist there at all), AND
+ * `__tests__/import-containment.test.ts` makes "every file `lib/`'s own
+ * code can reach" and "every file inside `lib/`" the same set (no import
+ * anywhere in `lib/**` may resolve OUTSIDE `lib/**`, checked by
+ * resolving each specifier to a real absolute path, never by pattern-
+ * matching its text). Only with both in place does "the scan reads every
+ * `.ts` file under `lib/`, and aliasing/re-exporting doesn't help" become
+ * a true statement about the whole graph rather than an assumption about
+ * one directory. That is genuinely useful and genuinely narrow — it is
+ * NOT, and is not claimed anywhere in this codebase to be, a guarantee
+ * that a `HumanId` cannot be forged at all.
  * IT CANNOT BE: TypeScript is deliberately unsound (`any` is a designed
  * escape hatch; a generic function's type parameter can be instantiated
  * with the brand at the CALL SITE, with no cast naming the brand anywhere
@@ -104,6 +114,17 @@ import type { NonEmptyArray } from "./non-empty-array.js";
  * an authorization on its own initiative. A caller lying to the tower is a
  * different, smaller, and correctly-attributed problem than the tower
  * lying to itself.
+ *
+ * THE TWO HONEST RESIDUALS, NAMED TOGETHER, PLAINLY, AS OF THIS ROUND —
+ * everything else on this axis (an ordinary cast, aliased or not; a
+ * non-`.ts` file inside `lib/`; an import reaching outside `lib/`) is
+ * closed by the three composed checks above:
+ *   1. The type checker's own unsoundness, INSIDE checked `lib/` source
+ *      (routes A/B — `any`, a generic instantiated at its call site, and
+ *      whatever else that open-ended class contains).
+ *   2. A CALLER of this library, OUTSIDE `lib/` entirely, forging an
+ *      authorization and passing it in as a parameter — out of scope for
+ *      every milestone this plan names, and correctly so.
  */
 
 /**

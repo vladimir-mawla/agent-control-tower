@@ -37,13 +37,28 @@ import { basename, join, relative } from "node:path";
  * of defending it. This project is all-TypeScript; a non-`.ts` file under
  * `lib/` is anomalous on its own terms, independent of this attack. This
  * file makes the scanner's input domain (".ts files under lib/") and
- * `lib/`'s actual permitted contents THE SAME SET, by construction: if no
- * non-`.ts` file can exist under `lib/` at all, there is no file left for
- * an ambient-declaration lie to hide in.
+ * `lib/`'s own INTERNAL contents THE SAME SET, by construction: no
+ * non-`.ts` file may exist under `lib/`.
  *
- * `human-id.ts` and `intervention.ts`'s own headers now each state this
- * domain in one sentence, naming this file as the check that keeps it
- * honest — see those files rather than re-deriving the argument here.
+ * THIS FILE, ALONE, DOES NOT CLOSE THE WHOLE AXIS — SAID PLAINLY, BECAUSE
+ * AN EARLIER VERSION OF THIS HEADER CLAIMED IT DID AND WAS WRONG:
+ * independent verification (round 5) moved the identical `.d.ts`/`.js`
+ * pair one directory up (`scripts/external-human.d.ts`/`.js`, outside
+ * `lib/` entirely) and imported it from a `lib/contracts/*.ts` file via a
+ * relative path walking out and back in — this check never sees a file
+ * outside `lib/` at all, so it correctly reported nothing. The composed
+ * closure needs a SECOND check this file does not provide:
+ * `__tests__/import-containment.test.ts`, which confirms no import
+ * anywhere in `lib/**` may resolve outside `lib/**`. Only together do the
+ * two make "no ambient-declaration lie can exist anywhere `lib/`'s own
+ * code can reach" a true statement — see `human-id.ts`'s and
+ * `intervention.ts`'s headers, and `.genesis/decisions/
+ * 0001-contracts.md` Decision 2, for that composed claim stated in full.
+ *
+ * `human-id.ts` and `intervention.ts`'s own headers each state the
+ * COMPOSED domain in one place, naming both this file and
+ * `import-containment.test.ts` as the checks that keep it honest — see
+ * those files rather than re-deriving the argument here.
  */
 
 const REPO_ROOT = join(import.meta.dirname, "..", "..", "..");
